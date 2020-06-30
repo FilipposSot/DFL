@@ -22,8 +22,10 @@ class Plant1(DFLDynamicPlant):
         self.N_u = 1
         self.N = self.N_x + self.N_eta
 
-        self.x_init_min = np.array([-1.0,-1.0,-1.0])
-        self.x_init_max = np.array([1.0 ,1.0 ,1.0])
+        self.x_init_min = np.array([-1.0,-1.0,-1.0,-1.0, 0.0])
+        self.x_init_max = np.array([1.0 , 1.0, 1.0, 1.0, 0.0])
+        self.u_min = np.array([0.5, -1.0])
+        self.u_max = np.array([1.0, -0.5])
 
     def get_s(self,x):
         '''
@@ -37,12 +39,12 @@ class Plant1(DFLDynamicPlant):
         '''
         return np.diag([1,1])
 
-    def Phi_soil(self, D, v_x, v_z):
+    @staticmethod
+    def Phi_soil(D, v_x, v_z):
         '''
         place hold soil force
         will be replaced by FEE
         '''
-
         F =  np.array([0,D]) + -D*np.array([1.0,0.0])*v_x + -D*np.array([0.0,1.0])*v_z # max(v_x,0)*(np.abs(np.array([v_x,v_z])*D)) +
         F = F + 10*max(v_x,0)*-D
         return F
@@ -72,6 +74,15 @@ class Plant1(DFLDynamicPlant):
     def g(self,x,u,t):
         
         return x
+   
+    def gkoop1(self,t,x,u):
+        x, z, v_x, v_z, gamma = x[0], x[1], x[2], x[3], x[4]
+        
+        s = self.get_s(x)
+        D = s-z
+        F = self.Phi_soil(D,v_x,v_z)
+        y = np.array([x,z,v_x,v_z,gamma, F[0],F[1]])
+        return y  
     
     # auxiliary variables (outputs from nonlinear elements)
     def phi(self,t,x,u):
@@ -86,27 +97,40 @@ def zero_u_func(y,t):
     u[1] = -1.0
     return u
 
+def control_u_func(y,t):
+    u = np.array([0.0,0.0])
+    # print(u)
+    u[0] = 1.0
+    u[1] = 2*(-0.5-y[1])
+    return u
 
 if __name__== "__main__":
     plant = Plant1()
     dfl = DFL(plant)
-    # dfl.generate_data_from_random_trajectories()
-    # dfl.generate_H_matrix()
 
+    setattr(plant, "g", plant.gkoop1)
+
+    dfl.generate_data_from_random_trajectories()
+    dfl.generate_K_matrix()
+
+   
     x_0 = np.array([0.0,0.0,0.0,0.0,0.0])
-    t_f = 20.0
+    t_f = 5.0
 
-    t, u, x_nonlin = dfl.simulate_system_nonlinear(x_0, zero_u_func, t_f)
-    
+    t, u, x_nonlin, y_nonlin= dfl.simulate_system_nonlinear(x_0, zero_u_func, t_f)
+    t, u, x_koop1, y_koop = dfl.simulate_system_koop(x_0,zero_u_func, t_f)
+
     fig, axs = plt.subplots(3, 1)   
     
-    axs[0].plot(t, x_nonlin[:,0], t, x_nonlin[:,1])
+    axs[0].plot(t, x_nonlin[:,0],'r', t, x_nonlin[:,1],'b')
+    axs[0].plot(t, x_koop1[:,0],'r--',  t, x_koop1[:,1],'b--')
     axs[0].set_xlim(0, t_f)
     axs[0].set_xlabel('time')
     axs[0].set_ylabel('position states')
     axs[0].grid(True)
 
-    axs[1].plot(t, x_nonlin[:,2], t, x_nonlin[:,3])
+    axs[1].plot(t, x_nonlin[:,2],'r', t, x_nonlin[:,3],'b')
+    axs[1].plot(t, x_koop1[:,2],'r--',  t, x_koop1[:,3],'b--')
     axs[1].set_xlim(0, t_f)
     axs[1].set_xlabel('time')
     axs[1].set_ylabel('velocity states')

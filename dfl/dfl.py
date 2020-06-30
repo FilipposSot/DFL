@@ -22,8 +22,8 @@ np.set_printoptions(suppress=True)
 
 class DFL():
     
-    def __init__(self,dynamic_plant, t_range_data = 5.0,
-                 dt_data = 0.05, n_traj_data = 100):
+    def __init__(self,dynamic_plant, t_range_data = 10.0,
+                 dt_data = 0.02, n_traj_data = 50):
         
         self.plant = dynamic_plant
         self.t_range_data = t_range_data
@@ -39,8 +39,6 @@ class DFL():
                            [self.H_u]])
 
         A_disc = expm(A_full*self.dt_data)
-
-        print(A_disc)
 
         B_disc = inv(A_full).dot(expm(A_full*self.dt_data) - np.eye(A_full.shape[0])).dot(B_full)
 
@@ -70,7 +68,8 @@ class DFL():
             # define initial conitions and range of time
             t_0 = 0.0
             t_f = self.t_range_data
-            x_0 = np.random.uniform(self.plant.x_init_min,self.plant.x_init_max)
+            x_0 = 0*np.random.uniform(self.plant.x_init_min,self.plant.x_init_max)
+            # x_0 = np.array([0,0])
 
             #initialize the ode integrator
             r = ode(self.plant.f).set_integrator('dopri5')
@@ -83,7 +82,7 @@ class DFL():
             y_array = []
 
             t_control_last = -100000
-            u_t =  0.0
+            u_t =  0.0*np.random.uniform(low = self.plant.u_min , high = self.plant.u_max)
 
             #simulate the system
             while r.successful() and r.t < t_f:
@@ -92,9 +91,10 @@ class DFL():
                 r.set_f_params(u_t).set_jac_params(u_t)
                 x_t = r.integrate(r.t+self.dt_data)             
 
-                if r.t - t_control_last > 1.0:
+                if r.t - t_control_last > 0.05:
                     t_control_last = r.t 
-                    u_t =  np.random.uniform(low = -4.0, high = 4.0)
+
+                    u_t =  np.random.uniform(low = self.plant.u_min , high = self.plant.u_max)
 
                 #these are the inherent variables if the system ie input and state
                 t_array.append(r.t)
@@ -111,10 +111,11 @@ class DFL():
                                            window_length = 5, polyorder = 3,
                                            deriv = 1, axis=0)/self.dt_data
 
-            # fig, axs = plt.subplots(3, 1)
-            # axs[0].plot(np.array(t_array), np.array(x_array)[:,0], 'b')
-            # axs[1].plot(np.array(t_array), np.array(x_array)[:,1], 'r')
-            # axs[2].plot(np.array(t_array), np.array(u_array), 'g')
+            if i == 1:
+                fig, axs = plt.subplots(3, 1)
+                axs[0].plot(np.array(t_array), np.array(x_array)[:,0], 'b')
+                axs[1].plot(np.array(t_array), np.array(x_array)[:,1], 'r')
+                axs[2].plot(np.array(t_array), np.array(u_array)[:,0], 'g')
 
             plt.show()
 
@@ -179,8 +180,6 @@ class DFL():
         
         self.A_koop = G[: , :self.Y_plus.shape[-1]] 
         self.B_koop = G[: , self.Y_plus.shape[-1]:]
-
-        print(self.B_koop)
 
     def generate_hybrid_model(self):
 
@@ -280,7 +279,8 @@ class DFL():
 
     def f_koop(self,t,x,u):
 
-        u = np.array([u])
+        # u = np.array([u])
+
         y_dot = np.dot(self.A_koop,x) + np.dot(self.B_koop,u)
 
         return y_dot
@@ -338,6 +338,7 @@ class DFL():
             t = t + dt
             y_t = g_func(t, x_t, u_t)
             u_t = u_func(g_func(t, x_t, u_t), t)
+            print('u_t',u_t)
 
             t_array.append(t)
             x_array.append(x_t)
