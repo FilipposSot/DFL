@@ -8,7 +8,10 @@ class MPC():
     
     def __init__(self, Ad, Bd, x_min, x_max, u_min, u_max, N = 20):
         
+        # system dimensions
         [self.nx, self.nu] = Bd.shape
+        
+        # optimization horizon
         self.N = N
 
         self.Ad = Ad
@@ -22,6 +25,8 @@ class MPC():
 
 
     def generate_objective(self, Q, QN, R, xr):
+        #generates the QP objective function
+        # 0.5x'Px + q'x
 
         # - quadratic objective
         P = sparse.block_diag([sparse.kron(sparse.eye(self.N), Q), QN,
@@ -33,6 +38,8 @@ class MPC():
         return P, q
 
     def generate_constraints(self, x0):
+        # generates the constraints for the system including state, inputs and dynamics
+        # l <= Ax <= u
 
         # - linear dynamics constraint
         Ax = sparse.kron(sparse.eye(self.N+1),-sparse.eye(self.nx)) + sparse.kron(sparse.eye(self.N+1, k=-1), self.Ad)
@@ -54,7 +61,7 @@ class MPC():
         return A, l, u
 
     def setup_new_problem(self, Q, QN, R, xr, x0):
-
+        # sets up a new osqp mpc problem by determining all the matrices and vectors
         P, q = self.generate_objective(Q, QN, R, xr)
         A, l, u = self.generate_constraints(x0)
 
@@ -64,26 +71,21 @@ class MPC():
         self.l = l
         self.u = u
 
-        self.prob.setup(P, q, A, l, u, warm_start=True)
+        self.prob.setup(P, q, A, l, u, warm_start = True, verbose = False)
 
 
     def solve(self):
+        #solve the mpc problem
         result = self.prob.solve()
-        # # Check solver status
-        # if result.info.status != 'solved':
-        #     print('hi')
-        #     raise ValueError('OSQP did not solve the problem!')
         return result.info.status == 'solved', result 
 
     def get_control(self, result):
+        #extract first control action from optimal solution
         ctrl = result.x[-self.N*self.nu:-(self.N-1)*self.nu]
         return ctrl
     
     def update_initial_state(self,x0):
-        # Update initial state
-        print('self.l', self.l[:self.nx])
-        print('x0', x0)
-
+        # Update initial state for optimization
         self.l[:self.nx] = -x0
         self.u[:self.nx] = -x0
         self.prob.update(l = self.l, u = self.u)
@@ -91,7 +93,6 @@ class MPC():
     def control_function(self, x, t):
 
         self.update_initial_state(x)
-
         solved, result  = self.solve()
 
         if solved:
@@ -99,35 +100,5 @@ class MPC():
         else:
             print('failed to find mpc solution')
             exit()
+
         return u
-
-if __name__== "__main__":
-
-
-
-    prob,l,u = create_MPC_problem(N,Q,QN,R,Ad,Bd,xmin,xmax,umin,umax)
-
-    # Simulate in closed loop
-    X = []
-    nsim = 15
-    for i in range(nsim):
-        # Solve
-        res = prob.solve()
-
-        # Check solver status
-        if res.info.status != 'solved':
-            raise ValueError('OSQP did not solve the problem!')
-
-        # Apply first control input to the plant
-        ctrl = res.x[-N*nu:-(N-1)*nu]
-        X.append(x0)
-        x0 = Ad.dot(x0) + Bd.dot(ctrl)
-
-        # Update initial state
-        l[:nx] = -x0
-        u[:nx] = -x0
-        prob.update(l=l, u=u)
-
-    X = np.array(X)
-    plt.plot(X[:,5])
-    plt.show()

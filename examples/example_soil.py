@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import numpy as np
-from dfl import *
-from dynamic_system import *
+from dfl.dfl.dfl import *
+from dfl.dfl.dynamic_system import *
 import matplotlib.pyplot as plt
 
 # T_RANGE_DATA = 1.0
@@ -22,8 +22,8 @@ class Plant1(DFLDynamicPlant):
         self.N_u = 1
         self.N = self.N_x + self.N_eta
 
-        self.x_init_min = np.array([-1.0,-1.0,-1.0,-1.0, 0.0])
-        self.x_init_max = np.array([1.0 , 1.0, 1.0, 1.0, 0.0])
+        self.x_min = np.array([-1.0,-1.0,-1.0,-1.0, 0.0])
+        self.x_max = np.array([1.0 , 1.0, 1.0, 1.0, 0.0])
         self.u_min = np.array([0.5, -1.0])
         self.u_max = np.array([1.0, -0.5])
 
@@ -45,8 +45,8 @@ class Plant1(DFLDynamicPlant):
         place hold soil force
         will be replaced by FEE
         '''
-        F =  np.array([0,D]) + -D*np.array([1.0,0.0])*v_x + -D*np.array([0.0,1.0])*v_z # max(v_x,0)*(np.abs(np.array([v_x,v_z])*D)) +
-        F = F + 10*max(v_x,0)*-D
+        F = np.array([0,D**3]) + -5*D*np.array([0.0,1.0])*v_z # max(v_x,0)*(np.abs(np.array([v_x,v_z])*D)) +
+        F = F + 5*max(v_x,0)*-D*np.array([1.0,0.0]) - 0.5*D*np.array([1.0,0.0])
         return F
 
     # nonlinear state equations
@@ -110,7 +110,8 @@ if __name__== "__main__":
 
     setattr(plant, "g", plant.gkoop1)
 
-    dfl.generate_data_from_random_trajectories()
+    x_0 = np.array([0.0,0.0,0.0,0.0,0.0])
+    dfl.generate_data_from_random_trajectories(t_range_data = 5.0, n_traj_data = 100, x_0 = x_0)
     dfl.generate_K_matrix()
 
    
@@ -122,21 +123,21 @@ if __name__== "__main__":
 
     fig, axs = plt.subplots(3, 1)   
     
-    axs[0].plot(t, x_nonlin[:,0],'r', t, x_nonlin[:,1],'b')
-    axs[0].plot(t, x_koop1[:,0],'r--',  t, x_koop1[:,1],'b--')
+    axs[0].plot(t, x_nonlin[:,0],'b', t, x_nonlin[:,1],'r')
+    axs[0].plot(t, x_koop1[:,0],'b--',  t, x_koop1[:,1],'r--')
     axs[0].set_xlim(0, t_f)
     axs[0].set_xlabel('time')
     axs[0].set_ylabel('position states')
     axs[0].grid(True)
 
-    axs[1].plot(t, x_nonlin[:,2],'r', t, x_nonlin[:,3],'b')
-    axs[1].plot(t, x_koop1[:,2],'r--',  t, x_koop1[:,3],'b--')
+    axs[1].plot(t, x_nonlin[:,2],'b', t, x_nonlin[:,3],'r')
+    axs[1].plot(t, x_koop1[:,2],'b--',  t, x_koop1[:,3],'r--')
     axs[1].set_xlim(0, t_f)
     axs[1].set_xlabel('time')
     axs[1].set_ylabel('velocity states')
-    axs[2].grid(True)
+    axs[1].grid(True)
 
-    axs[2].plot(t, x_nonlin[:,4])
+    axs[2].plot(t, x_nonlin[:,4],'g')
     axs[2].set_xlim(0, t_f)
     axs[2].set_xlabel('time')
     axs[2].set_ylabel('bucket filling')
