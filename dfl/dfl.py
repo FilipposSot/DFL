@@ -82,7 +82,9 @@ class DFL():
         Y = Y.T
         Y = np.expand_dims(Y, axis=0)
 
-        (A_x_disc,_,_,_,_) = cont2discrete((self.plant.A_x, self.plant.B_x, np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),self.dt_data)
+        (A_x_disc,_,_,_,_) = cont2discrete((self.plant.A_x, self.plant.B_x, 
+                                            np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
+                                            self.dt_data)
         B_x_disc = self.plant.B_x*self.dt_data
         A_eta_hybrid_disc = self.plant.A_eta_hybrid*self.dt_data
                
@@ -125,7 +127,7 @@ class DFL():
         x   = xi[:self.plant.N_x]
         eta = xi[self.plant.N_x:self.plant.N_x + self.plant.N_eta]
         
-        x_dot   = np.dot(self.plant.A_x,x) +  np.dot(self.plant.A_eta, eta) + np.dot(self.plant.B_x,u) # temporary fix.
+        x_dot   = np.dot(self.plant.A_x,x) +  np.dot(self.plant.A_eta, eta) + np.dot(self.plant.B_x,u)
         eta_dot = np.dot(self.H_x,x) +  np.dot(self.H_eta, eta) + np.dot(self.H_u,u)
 
         return np.concatenate((x_dot,eta_dot))
@@ -205,9 +207,10 @@ class DFL():
 
         return np.array(t_array), np.array(u_array), np.array(x_array), np.array(y_array)
 
-    def generate_data_from_random_trajectories(self, t_range_data = 10.0, n_traj_data = 50, x_0 = None, plot_sample = True):
+    def generate_data_from_random_trajectories(self, t_range_data = 10.0, n_traj_data = 50,
+                                                     x_0 = None, plot_sample = False):
         '''
-        create random data to train DFL
+        create random data to train DFL and other dynamic system models
         '''
         t_data = []
         x_data = []
@@ -245,8 +248,8 @@ class DFL():
             eta_array = []
             y_array = []
 
-            t_control_last = -100000
-            u_t = np.zeros(self.plant.N_u)  # 0.0*np.random.uniform(low = self.plant.u_min , high = self.plant.u_max)
+            t_control_last = -10000000
+            u_t = np.zeros(self.plant.N_u)  
 
             #simulate the system
             while r.successful() and r.t < t_f:

@@ -36,8 +36,8 @@ class Plant1(DFLDynamicPlant):
         self.x_min = np.array([-2.0,-2.0])
         self.x_max = np.array([2.0 ,2.0])
 
-        self.u_min = np.array([-1.0])
-        self.u_max = np.array([ 1.0])
+        self.u_min = np.array([-2.0])
+        self.u_max = np.array([ 2.0])
 
         # Hybrid model
         self.N_eta_hybrid = 1
@@ -150,7 +150,7 @@ if __name__== "__main__":
     dfl1.generate_K_matrix()
 
     x_0 = np.array([1,0])
-    T = 30
+    T = 10.0
 
     # Objective function
     Q = sparse.diags([1., 0., 0., 0.])
@@ -165,17 +165,27 @@ if __name__== "__main__":
     x_min = np.array([-3.,-3.,-3.,-3.])
     x_max = np.array([3.,3.,3.,3.])
 
+    # dummy reference trajectory
+    t_traj = np.arange(0,T,0.05)
+    x1_traj = np.sin(0.5*t_traj)
+    x_traj = np.vstack((x1_traj,0*x1_traj,0*x1_traj,0*x1_traj)).T
+
+    # mpc = MPC(dfl1.A_koop,
+    #           dfl1.B_koop,
+    #           x_min, x_max,
+    #           plant1.u_min,
+    #           plant1.u_max)
+
     mpc = MPC(dfl1.A_koop,
               dfl1.B_koop,
               x_min, x_max,
               plant1.u_min,
               plant1.u_max)
-
-    mpc.setup_new_problem(Q, QN, R, xr, x0)
     
-    x_0 = np.array([1,0])
+    mpc.setup_new_problem(Q, QN, R, t_traj, x_traj, x0)
 
-    t, u, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0,  mpc.control_function, 10.0)
+    x_0 = np.array([1,0])
+    t, u, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0,  mpc.control_function, T)
     # t, u, x_koop1, y_koop = dfl1.simulate_system_koop(x_0, mpc.control_function, 10.0)
     
 
@@ -183,6 +193,8 @@ if __name__== "__main__":
     fig, axs = plt.subplots(3, 1)
 
     axs[0].plot(t, x_nonlin[:,0], 'b')
+    axs[0].plot(t_traj, x_traj[:,0], 'b--')
+
     axs[1].plot(t, x_nonlin[:,1], 'r')
     axs[2].plot(t, u[:,0], 'g')
 
@@ -198,8 +210,6 @@ if __name__== "__main__":
 
     dfl1.generate_data_from_random_trajectories()
     dfl1.generate_H_matrix()
-
-    exit()
 
     ################# HYBRID MODEL TEST ##############################################
     plant1 = Plant1()

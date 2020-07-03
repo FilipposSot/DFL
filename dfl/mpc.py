@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 class MPC():
     
-    def __init__(self, Ad, Bd, x_min, x_max, u_min, u_max, N = 20):
+    def __init__(self, Ad, Bd, x_min, x_max, u_min, u_max, N = 50):
         
         # system dimensions
         [self.nx, self.nu] = Bd.shape
@@ -31,9 +31,25 @@ class MPC():
         # - quadratic objective
         P = sparse.block_diag([sparse.kron(sparse.eye(self.N), Q), QN,
                                sparse.kron(sparse.eye(self.N), R)], format='csc')
+        
         # - linear objective
-        q = np.hstack([np.kron(np.ones(self.N), -Q.dot(xr)), -QN.dot(xr),
-                       np.zeros(self.N*self.nu)])
+        # fixed reference state
+        if len(xr.shape) == 1:
+            q = np.hstack([np.kron(np.ones(self.N), -Q.dot(xr)), -QN.dot(xr),
+                           np.zeros(self.N*self.nu)])
+
+        # reference state trajectory
+        elif len(xr.shape) == 2:
+
+            # if length of reference < horizon then add final reference
+            if xr.shape[0] < self.N:
+                xr = np.vstack((xr,np.tile(xr[-1,:],(self.N-xr.shape[0],1))))
+            # if length of reference > horizon then we trim the reference
+            elif xr.shape[0] > self.N:
+                xr = xr[:self.N,:]
+
+            q = np.hstack([-Q.dot(xr.T).T.flatten(), -QN.dot(xr[-1,:]),
+                           np.zeros(self.N*self.nu)])
 
         return P, q
 
@@ -60,8 +76,19 @@ class MPC():
 
         return A, l, u
 
-    def setup_new_problem(self, Q, QN, R, xr, x0):
-        # sets up a new osqp mpc problem by determining all the matrices and vectors
+    def setup_new_problem(self, Q, QN, R, t_traj, x_traj, x0, t = 0):
+        # sets up a new osqp mpc problem by determining all the 
+        # matrices and vectors and adding them to the problem
+        
+        self.Q = Q
+        self.QN = QN
+        self.R = R
+
+        self.t_traj = t_traj
+        self.x_traj = x_traj
+
+        xr = self.get_reference(t)
+
         P, q = self.generate_objective(Q, QN, R, xr)
         A, l, u = self.generate_constraints(x0)
 
@@ -90,9 +117,28 @@ class MPC():
         self.u[:self.nx] = -x0
         self.prob.update(l = self.l, u = self.u)
 
-    def control_function(self, x, t):
+    def update_objective(self, P, q):
+        # Update initial state for optimization
+        self.P = P
+        self.q = q
+        self.prob.update(Px = P.data, q = q)
 
+    def get_reference(self,t):
+        # produces the reference for the mpc controller
+        if t < self.t_traj[-1]:
+            xr = self.x_traj[self.t_traj>t,:]
+        else:
+            xr = self.x_traj[-1,:]
+        return xr
+
+    def control_function(self, x, t):
+        # callable control function
         self.update_initial_state(x)
+
+        xr = self.get_reference(t)
+        P, q = self.generate_objective(self.Q, self.QN, self.R, xr)
+        self.update_objective(P, q)
+
         solved, result  = self.solve()
 
         if solved:
