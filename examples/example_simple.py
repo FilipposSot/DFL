@@ -36,8 +36,8 @@ class Plant1(DFLDynamicPlant):
         self.x_min = np.array([-2.0,-2.0])
         self.x_max = np.array([2.0 ,2.0])
 
-        self.u_min = np.array([-2.0])
-        self.u_max = np.array([ 2.0])
+        self.u_min = np.array([-2.5])
+        self.u_max = np.array([ 2.5])
 
         # Hybrid model
         self.N_eta_hybrid = 1
@@ -75,13 +75,13 @@ class Plant1(DFLDynamicPlant):
     # nonlinear observation equations
     @staticmethod
     def g(t,x,u):
-        q,v = x[0],x[1]
+        q,v = x[0], x[1]
         y = np.array([q,v])
         return y 
     
     @staticmethod
     def gkoop1(t,x,u):
-        q,v = x[0],x[1]
+        q,v = x[0], x[1]
         y = np.array([q,v,Plant1.phi_c1(q), Plant1.phi_r1(v)])
         return y  
     
@@ -142,7 +142,6 @@ if __name__== "__main__":
     dfl1 = DFL(plant1)
     setattr(plant1, "g", Plant1.gkoop1)
 
-
     # ########## KOOPMAN MPC TEST
     dfl1.generate_data_from_random_trajectories()
     # dfl1.generate_H_matrix()
@@ -180,7 +179,8 @@ if __name__== "__main__":
               dfl1.B_koop,
               x_min, x_max,
               plant1.u_min,
-              plant1.u_max)
+              plant1.u_max,
+              N = 20)
     
     mpc.setup_new_problem(Q, QN, R, t_traj, x_traj, x0)
 
@@ -224,6 +224,7 @@ if __name__== "__main__":
     # x_0 = np.random.uniform(plant1.x_init_min,plant1.x_init_max)
     x_0 = np.array([0,0])
     seed = np.random.randint(5)
+
     np.random.seed(seed = seed)
     t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, rand_u_func, 10.0)
     

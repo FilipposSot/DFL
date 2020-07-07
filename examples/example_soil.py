@@ -16,7 +16,6 @@ class Plant1(DFLDynamicPlant):
     def __init__(self):
         # Linear part of states matrices
 
-
         self.N_x = 3
         self.N_eta = 4
         self.N_u = 1
