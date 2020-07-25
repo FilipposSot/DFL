@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 import sys
+
+#import system id toolboxes
 sys.path.insert(0, "/home/filippos/repositories/pyN4SID")
 import ssid
+from sippy import *
 
 from abc import ABC, abstractmethod 
 import numpy as np 
@@ -78,9 +81,12 @@ class DFL():
 
         Y_temp = self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]).T
 
-        Y = Y_temp[0,:] + Y_temp[1,:]
-        Y = Y.T
-        Y = np.expand_dims(Y, axis=0)
+        Y2 = Y_temp[0,:] + Y_temp[1,:]
+        Y = self.plant.P.dot(Y_temp)
+        
+        if len(Y.shape) == 1:
+            Y=Y.T
+            Y = np.expand_dims(Y, axis=0)
 
         (A_x_disc,_,_,_,_) = cont2discrete((self.plant.A_x, self.plant.B_x, 
                                             np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
@@ -91,12 +97,39 @@ class DFL():
         NumURows = 200
         NumUCols = 1500
 
-        A_til,B_til,C_til,D_til,_,S = ssid.N4SID(U,Y,NumURows,NumUCols,2)
+        # A_til,B_til,C_til,D_til,_,S = ssid.N4SID(U,Y,NumURows,NumUCols,2)
+
+        method = 'MOESP'
+        sys_id = system_identification(Y, U, method,
+                                       SS_fixed_order = self.plant.N_eta,
+                                       SS_D_required = True)
         
+        A_til,B_til,C_til,D_til = sys_id.A, sys_id.B, sys_id.C, sys_id.D
+        
+        print(A_til.shape)
+        print(B_til.shape)
+        print(C_til.shape)
+        print(D_til.shape)
+
+
+        # D_til = D_til.T
+        # A_til2,B_til2,C_til2,D_til2,_,S = ssid.N4SID(U,Y,NumURows,NumUCols,2)
+
+        # print(D_til)
+        # print(D_til2)
+        # xid, yid = fsetSIM.SS_lsim_process_form(sys_id.A, sys_id.B, sys_id.C, sys_id.D, U, sys_id.x0)
+
+
+
+
         B_til_1 = B_til[:,:self.plant.N_x]
         B_til_2 = B_til[:,self.plant.N_x:]
         D_til_1 = D_til[:,:self.plant.N_x]
         D_til_2 = D_til[:,self.plant.N_x:]
+
+        # print(A_x_disc)
+        # print(A_eta_hybrid_disc)
+        # print(D_til_1)
 
         A1 = A_x_disc + A_eta_hybrid_disc.dot(D_til_1)
         A2 = A_eta_hybrid_disc.dot(C_til)
@@ -165,7 +198,7 @@ class DFL():
 
         # create numerical integration object
         if continuous:
-            r = ode(f_func).set_integrator('vode', method = 'bdf')
+            r = ode(f_func).set_integrator('vode', method = 'bdf', max_step = 0.05)
             r.set_initial_value(x_0,t)
 
         t_array = []
