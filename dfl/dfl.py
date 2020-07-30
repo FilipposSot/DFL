@@ -31,21 +31,7 @@ class DFL():
         self.dt_data = dt_data 
         self.dt_control = dt_control 
 
-    def generate_disrete_time_DFL_system(self):
-
-        A_full = np.block([[self.plant.A_x, self.plant.A_eta],
-                           [self.H_x,   self.H_eta]])
-
-        B_full = np.block([[self.plant.B_x],
-                           [self.H_u]])
-
-        A_disc = expm(A_full*self.dt_data)
-
-        B_disc = inv(A_full).dot(expm(A_full*self.dt_data) - np.eye(A_full.shape[0])).dot(B_full)
-
-
-
-    def generate_H_matrix(self):
+    def regress_H_cont_matrix(self):
         '''
         regress the H matrix for DFL model
         '''
@@ -56,13 +42,54 @@ class DFL():
         
         Eta_dot = self.eta_dot_data.reshape(-1, self.eta_dot_data.shape[-1])
 
-        self.H = lstsq(np.array(Xi,dtype='float'),np.array(Eta_dot,dtype='float'),rcond=None)[0].T
-        self.H_x   = self.H[:,:self.plant.N_x]
-        self.H_eta = self.H[:,self.plant.N_x:self.plant.N_x+self.plant.N_eta]
-        self.H_u   = self.H[:,self.plant.N_x+self.plant.N_eta:self.plant.N_x+self.plant.N_eta+self.plant.N_u]
+        self.H_cont = lstsq(np.array(Xi,dtype='float'),np.array(Eta_dot,dtype='float'),rcond=None)[0].T
+        self.H_cont_x   = self.H_cont[:,:self.plant.N_x]
+        self.H_cont_eta = self.H_cont[:,self.plant.N_x:self.plant.N_x+self.plant.N_eta]
+        self.H_cont_u   = self.H_cont[:,self.plant.N_x+self.plant.N_eta:self.plant.N_x+self.plant.N_eta+self.plant.N_u]
+
+        self.generate_disrete_time_DFL_system()
 
 
-    def generate_K_matrix(self):
+    def regress_H_disc_matrix(self):
+        '''
+        regress the H matrix for DFL model
+        '''
+        omega = np.concatenate((self.X_minus.reshape(-1, self.X_minus.shape[-1]),
+                                self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]),
+                                self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
+        
+        Y = self.Eta_plus.reshape(-1, self.Eta_plus.shape[-1]).T
+
+        H_disc = lstsq(omega.T,Y.T,rcond=None)[0].T
+        
+        H_disc_x   = H_disc[:,:self.plant.N_x]
+        H_disc_eta = H_disc[:,self.plant.N_x:self.plant.N_x+self.plant.N_eta]
+        H_disc_u   = H_disc[:,self.plant.N_x+self.plant.N_eta:self.plant.N_x+self.plant.N_eta+self.plant.N_u]
+
+
+        
+    def generate_disrete_time_DFL_system(self):
+
+        A_cont_full = np.block([[self.plant.A_cont_x, self.plant.A_cont_eta],
+                                [self.H_cont_x,   self.H_cont_eta]])
+
+        B_cont_full = np.block([[self.plant.B_cont_x],
+                                [self.H_cont_u]])
+
+        # A_disc = expm(A_full*self.dt_data)
+        # B_disc = inv(A_full).dot(expm(A_full*self.dt_data) - np.eye(A_full.shape[0])).dot(B_full)
+
+        (A_disc,B_disc,_,_,_) = cont2discrete((A_cont_full, B_cont_full, 
+                                                 np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
+                                                 self.dt_data)
+
+        self.A_disc_dfl = A_disc
+        self.B_disc_dfl = B_disc
+
+        # B_x_disc = self.plant.B_x*self.dt_data
+        # A_eta_hybrid_disc = self.plant.A_eta_hybrid*self.dt_data
+
+    def regress_K_matrix(self):
 
         omega = np.concatenate((self.Y_minus.reshape(-1, self.Y_minus.shape[-1]),
                                 self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
@@ -71,8 +98,8 @@ class DFL():
 
         G = lstsq(omega.T,Y.T,rcond=None)[0].T
         
-        self.A_koop = G[: , :self.Y_plus.shape[-1]] 
-        self.B_koop = G[: , self.Y_plus.shape[-1]:]
+        self.A_disc_koop = G[: , :self.Y_plus.shape[-1]] 
+        self.B_disc_koop = G[: , self.Y_plus.shape[-1]:]
 
     def generate_hybrid_model(self):
 
@@ -88,71 +115,53 @@ class DFL():
             Y=Y.T
             Y = np.expand_dims(Y, axis=0)
 
-        (A_x_disc,_,_,_,_) = cont2discrete((self.plant.A_x, self.plant.B_x, 
+        (A_disc_x,_,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
                                             np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
                                             self.dt_data)
-        B_x_disc = self.plant.B_x*self.dt_data
-        A_eta_hybrid_disc = self.plant.A_eta_hybrid*self.dt_data
+        B_disc_x = self.plant.B_cont_x*self.dt_data
+        A_disc_eta_hybrid = self.plant.A_cont_eta_hybrid*self.dt_data
                
-        NumURows = 200
-        NumUCols = 1500
+        # NumURows = 200
+        # NumUCols = 1500
 
         # A_til,B_til,C_til,D_til,_,S = ssid.N4SID(U,Y,NumURows,NumUCols,2)
 
-        method = 'MOESP'
-        sys_id = system_identification(Y, U, method,
-                                       SS_fixed_order = self.plant.N_eta,
-                                       SS_D_required = True)
-        
+        method = 'N4SID'
+        sys_id = system_identification(Y, U, method,SS_D_required = True)
+
+        # SS_fixed_order = self.plant.N_eta,
         A_til,B_til,C_til,D_til = sys_id.A, sys_id.B, sys_id.C, sys_id.D
         
-        print(A_til.shape)
-        print(B_til.shape)
-        print(C_til.shape)
-        print(D_til.shape)
-
-
-        # D_til = D_til.T
-        # A_til2,B_til2,C_til2,D_til2,_,S = ssid.N4SID(U,Y,NumURows,NumUCols,2)
-
-        # print(D_til)
-        # print(D_til2)
-        # xid, yid = fsetSIM.SS_lsim_process_form(sys_id.A, sys_id.B, sys_id.C, sys_id.D, U, sys_id.x0)
-
-
-
-
         B_til_1 = B_til[:,:self.plant.N_x]
         B_til_2 = B_til[:,self.plant.N_x:]
         D_til_1 = D_til[:,:self.plant.N_x]
         D_til_2 = D_til[:,self.plant.N_x:]
 
-        # print(A_x_disc)
-        # print(A_eta_hybrid_disc)
-        # print(D_til_1)
+        A1 = A_disc_x + A_disc_eta_hybrid.dot(D_til_1)
+        A2 = A_disc_eta_hybrid.dot(C_til)
+        B1 = B_disc_x+ A_disc_eta_hybrid.dot(D_til_2)
 
-        A1 = A_x_disc + A_eta_hybrid_disc.dot(D_til_1)
-        A2 = A_eta_hybrid_disc.dot(C_til)
-        B1 = B_x_disc + A_eta_hybrid_disc.dot(D_til_2)
+        self.A_disc_hybrid_full =  np.block([[A1     ,  A2],
+                                        [B_til_1,  A_til ]])
 
-        self.A_hybrid =  np.block([[A1     ,  A2],
-                                   [B_til_1,  A_til ]])
+        self.B_disc_hybrid_full = np.block([[B1],
+                                       [B_til_2]])
 
-        self.B_hybrid = np.block([[B1],
-                                  [B_til_2]])
+        self.C_til = C_til
+        self.D_til_1 = D_til_1
+        self.D_til_2 = D_til_2
 
+    def get_best_initial_hybrid(self, x_0, u_func, t_f):
 
-    def generate_N4SID_model(self):
+        u_0 = np.zeros((self.plant.N_u,1))
+        eta_0 = self.plant.phi_hybrid(0.0, x_0, u_0)
+        xi_0 = np.linalg.pinv(self.C_til).dot(eta_0 - self.D_til_1.dot(x_0) -self.D_til_2.dot(u_0)[:,0])
 
-        U = self.U_minus.reshape(-1, self.U_minus.shape[-1]).T
-        Y = self.Y_plus.reshape(-1, self.Y_plus.shape[-1]).T
-        
-        NumURows = 30
-        NumUCols = 1800
+        z_0 = np.concatenate((x_0,xi_0))
 
-        AID,BID,CID,DID,CovID,S = ssid.N4SID(U,Y,NumURows,NumUCols,4)
+        return z_0 
 
-    def f_dfl(self,t,xi,u):
+    def f_cont_dfl(self,t,xi,u):
 
         if not isinstance(u,np.ndarray):
             u = np.array([u])
@@ -160,28 +169,37 @@ class DFL():
         x   = xi[:self.plant.N_x]
         eta = xi[self.plant.N_x:self.plant.N_x + self.plant.N_eta]
         
-        x_dot   = np.dot(self.plant.A_x,x) +  np.dot(self.plant.A_eta, eta) + np.dot(self.plant.B_x,u)
-        eta_dot = np.dot(self.H_x,x) +  np.dot(self.H_eta, eta) + np.dot(self.H_u,u)
+        x_dot   = np.dot(self.plant.A_cont_x,x) +  np.dot(self.plant.A_cont_eta, eta) + np.dot(self.plant.B_cont_x,u)
+        eta_dot = np.dot(self.H_cont_x,x) +  np.dot(self.H_cont_eta, eta) + np.dot(self.H_cont_u,u)
 
         return np.concatenate((x_dot,eta_dot))
 
-    def f_koop(self,t,x,u):
+    def f_disc_dfl(self,t,x,u):
 
         if not isinstance(u,np.ndarray):
             u = np.array([u])
 
-        y_dot = np.dot(self.A_koop,x) + np.dot(self.B_koop,u)
+        y_plus = np.dot(self.A_disc_dfl,x) + np.dot(self.B_disc_dfl, u)
 
-        return y_dot
+        return y_plus
 
-    def f_hybrid(self,t,x,u):
+    def f_disc_koop(self,t,x,u):
 
         if not isinstance(u,np.ndarray):
             u = np.array([u])
 
-        x_dot = np.dot(self.A_hybrid,x) + np.dot(self.B_hybrid,u)
+        y_plus = np.dot(self.A_disc_koop,x) + np.dot(self.B_disc_koop, u)
 
-        return x_dot
+        return y_plus
+
+    def f_disc_hybrid(self,t,x,u):
+
+        if not isinstance(u,np.ndarray):
+            u = np.array([u])
+
+        x_plus = np.dot(self.A_disc_hybrid_full,x) + np.dot(self.B_disc_hybrid_full, u)
+
+        return x_plus
 
     @staticmethod
     def simulate_system(x_0, u_minus, t_f, dt, u_func, dt_control, f_func, g_func, continuous = True):
@@ -311,15 +329,20 @@ class DFL():
                                            deriv = 1, axis=0)/self.dt_data
 
             if plot_sample and i == 0:
-                fig, axs = plt.subplots(3, 1)
-                axs[0].plot(np.array(t_array), np.array(x_array)[:,0], 'b')
-                axs[1].plot(np.array(t_array), np.array(x_array)[:,1], 'r')
-                axs[2].plot(np.array(t_array), np.array(u_array)[:,0], 'g')
+                fig, axs = plt.subplots(5, 1)
+                axs[0].plot(np.array(t_array), np.array(x_array)[:,0], 'k')
+                axs[1].plot(np.array(t_array), np.array(x_array)[:,1], 'k')
+                axs[2].plot(np.array(t_array), np.array(x_array)[:,2], 'k')
+                axs[3].plot(np.array(t_array), np.array(x_array)[:,3], 'k')
+                axs[4].plot(np.array(t_array), np.array(u_array)[:,0], 'k')
                 
-                axs[2].set_xlabel('time')
-                axs[0].set_ylabel('x')
-                axs[1].set_ylabel('v')
-                axs[2].set_ylabel('u')
+                axs[4].set_xlabel('time')
+
+                axs[0].set_ylabel('q1')
+                axs[1].set_ylabel('q2')
+                axs[2].set_ylabel('p1')
+                axs[3].set_ylabel('p2')
+                axs[4].set_ylabel('u')
                 
                 plt.show()
 
@@ -365,16 +388,21 @@ class DFL():
         
         return t, u, x, y
         
-    def simulate_system_dfl(self, x_0, u_func, t_f):
+    def simulate_system_dfl(self, x_0, u_func, t_f, continuous = True):
 
         u_minus = np.zeros((self.plant.N_u,1))
         eta_0 = self.plant.phi(0.0, x_0, u_minus)
         xi_0 = np.concatenate((x_0,eta_0))
-
-        t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
-                                        u_func, self.dt_control, self.f_dfl, self.plant.g,
-                                        continuous = True)
         
+        if continuous == True:
+            t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
+                                            u_func, self.dt_control, self.f_cont_dfl, self.plant.g,
+                                            continuous = True)
+        else:
+            t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
+                                            u_func, self.dt_control, self.f_disc_dfl, self.plant.g,
+                                            continuous = False)
+            
         return t, u, xi, y 
 
     def simulate_system_koop(self, x_0, u_func, t_f):
@@ -391,10 +419,11 @@ class DFL():
 
         u_minus = np.zeros((self.plant.N_u,1))
         eta_0 = self.plant.phi(0.0, x_0, u_minus)
-        xi_0 = np.concatenate((x_0,eta_0))
+        # xi_0 = np.concatenate((x_0,eta_0))
+        xi_0 = self.get_best_initial_hybrid(x_0, u_func, t_f)
         # print(xi_0)
         t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
-                                        u_func, self.dt_control, self.f_hybrid, self.plant.g,
+                                        u_func, self.dt_control, self.f_disc_hybrid, self.plant.g,
                                         continuous = False)
 
         return t,u,xi,y

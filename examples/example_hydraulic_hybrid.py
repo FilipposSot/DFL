@@ -12,41 +12,46 @@ I_1 = 1.0
 I_2 = 1.0
 a1,a2,a3 = 1.0,1.0,1.0
 k1,k2 = 1.0,1.0
+
 class Plant1(DFLDynamicPlant):
     
     def __init__(self):
         
+        # Structure of system
         self.N_x = 4
         self.N_eta = 5
         self.N_u = 1
 
+        # Combined system order
         self.N = self.N_x + self.N_eta
 
         # User defined matrices for DFL
-        self.A_x  = np.array([[0.0, 0.0, 0.0,   1/I_2],
+        self.A_cont_x  = np.array([[0.0, 0.0, 0.0,   1/I_2],
                               [0.0, 0.0, 1/I_1, -1/I_2],
                               [0.0, 0.0, 0.0, 0.0],
                               [0.0, 0.0, 0.0, 0.0]])
 
-        self.A_eta = np.array([[0.0 , 0.0, 0.0, 0.0, 0.0],
-                               [0.0 , 0.0, 0.0, 0.0, 0.0],
-                               [-1.0, 0.0, 0.0,-1.0, -1.0],
-                               [0.0 ,-1.0, -1.0, 1.0, 1.0]])
+        self.A_cont_eta = np.array([[0.0 , 0.0, 0.0, 0.0, 0.0],
+                                    [0.0 , 0.0, 0.0, 0.0, 0.0],
+                                    [-1.0, 0.0, 0.0,-1.0, -1.0],
+                                    [0.0 ,-1.0, -1.0, 1.0, 1.0]])
 
-        self.B_x = np.array([[0.0],[0.0],[1.0],[0.0]])
-        # # Limits for inputs and states
+        self.B_cont_x = np.array([[0.0],[0.0],[1.0],[0.0]])
+        
+        # Limits for inputs and states
         self.x_min = np.array([-1.0,-1.0,-1.0,-1.0])
         self.x_max = np.array([1.0 ,1.0, 1.0 ,1.0])
         self.u_min = np.array([-2.5])
         self.u_max = np.array([ 2.5])
-        # Hybrid model
+        
+        # Hybrid model definition
         self.N_eta_hybrid = 3
         
         self.P =  np.array([[1, 0, 0, 0, 0],
                             [0, 1, 1, 0, 0],
                             [0, 0, 0, 1, 1]])
 
-        self.A_eta_hybrid =   self.A_eta.dot(np.linalg.pinv(self.P))
+        self.A_cont_eta_hybrid =   self.A_cont_eta.dot(np.linalg.pinv(self.P))
 
    # functions defining constituitive relations for this particular system
     @staticmethod
@@ -57,13 +62,12 @@ class Plant1(DFLDynamicPlant):
     @staticmethod
     def phi_r2(f):
         e = a2*np.sign(f)*f**2
-        # e = 100*f
-        # e = np.clip(e, -0.5, 0.5), 
         return e
 
     @staticmethod
     def phi_r3(f):
-        e = a3*np.sign(f)*f**2
+        # e = a3*np.sign(f)*f**2
+        e = 0.25*(np.tanh(5*f)-np.tanh(f)) + 0.5*np.tanh(5*f) + 0.01*f
         return e
 
     @staticmethod
@@ -89,31 +93,13 @@ class Plant1(DFLDynamicPlant):
         return x_dot
 
     # nonlinear observation equations
-    @staticmethod
-    def g(t,x,u):
+    def g(self,t,x,u):
         q1,q2,p1,p2 = x[0],x[1],x[2],x[3]
-        y = np.array([q1,q2,p1,p2])
+        eta = self.phi(t,x,u)
+        x = np.array([q1,q2,p1,p2])
+        y = np.concatenate((x,eta))
         return y 
     
-    # @staticmethod
-    # def gkoop1(t,x,u):
-    #     q,v = x[0], x[1]
-    #     y = np.array([q,v,Plant1.phi_c1(q), Plant1.phi_r1(v)])
-    #     return y  
-    
-    # @staticmethod
-    # def gkoop2(t,x,u):
-    #     q,v = x[0],x[1]
-
-    #     y = np.array([q,v,q**2,q**3,q**4,q**5,q**6,q**7,
-    #                   v**2,v**3,v**4,v**5,v**6,v**7,v**9,v**11,v**13,v**15,v**17,v**19,
-    #                   v*q,v*q**2,v*q**3,v*q**4,v*q**5,
-    #                   v**2*q,v**2*q**2,v**2*q**3,v**2*q**4,v**2
-    #                   *q**5,
-    #                   v**3*q,v**3*q**2,v**3*q**3,v**3*q**4,v**3*q**5])
-    #     return y 
-
-
     # auxiliary variables (outputs from nonlinear elements)
     def phi(self,t,x,u):
         '''
@@ -134,11 +120,136 @@ class Plant1(DFLDynamicPlant):
         '''
         outputs the values of the auxiliary variables
         '''
-        q,v = x[0],x[1]
-        eta = np.zeros(self.N_eta)
-        eta[0] = self.phi_c1(q) + self.phi_r1(v)
+        q1,q2,p1,p2 = x[0],x[1],x[2],x[3]
+        
+        eta = np.zeros(self.N_eta_hybrid)
+        eta[0] = self.phi_r1(p1/I_1)
+        eta[1] = self.phi_r2(p2/I_2)+ self.phi_c1(q1)
+        eta[2] = self.phi_r3(p1/I_1 - p2/I_2) + self.phi_c2(q2)
 
         return eta
+    # def phi_hybrid(self,t,x,u):
+    #     '''
+    #     outputs the values of the auxiliary variables
+    #     '''
+    #     q,v = x[0],x[1]
+    #     eta = np.zeros(self.N_eta)
+    #     eta[0] = self.phi_c1(q) + self.phi_r1(v)
+
+    #     return eta
+
+class Plant2(DFLDynamicPlant):
+    
+    def __init__(self):
+        
+        self.N_x = 4
+        self.N_eta = 5
+        self.N_u = 1
+
+        self.N = self.N_x + self.N_eta
+
+        # User defined matrices for DFL
+        self.A_x  = np.array([[0.0, 0.0, 1/I_1, -1/I_2],
+                              [0.0, 0.0, 0.0  ,  1/I_2],
+                              [0.0, 0.0, 0.0  ,  0.0 ],
+                              [0.0, 0.0, 0.0  ,  0.0 ]])
+
+        self.A_eta = np.array([[0.0 ,  0.0, -1.0,  0.0,  0.0],
+                               [0.0 ,  0.0,  0.0,  0.0,  0.0],
+                               [-1.0, -1.0,  0.0,  0.0,  0.0],
+                               [0.0 ,  1.0,  0.0, -1.0, -1.0]])
+
+        self.B_x = np.array([[0.0],[0.0],[1.0],[0.0]])
+        
+        # Limits for inputs and states
+        self.x_min = np.array([-1.0,-1.0,-1.0, -1.0])
+        self.x_max = np.array([1.0 , 1.0, 1.0, 1.0])
+       
+        self.u_min = np.array([-2.5])
+        self.u_max = np.array([ 2.5])
+        
+        # Hybrid model
+        self.N_eta_hybrid = 3
+        
+        self.P2 =  np.array([[1, 0, 0, 0, 0],
+                            [0, 1, 1, 0, 0],
+                            [0, 0, 0, 1, 1]])
+
+        self.A_eta_hybrid = self.A_eta.dot(np.linalg.pinv(self.P))
+
+   # functions defining constituitive relations for this particular system
+    @staticmethod
+    def phi_r1(f):
+        e = a1*np.sign(f)*f**2
+        return e
+
+    @staticmethod
+    def phi_r2(f):
+        e = a2*np.sign(f)*f**2
+        return e
+
+    @staticmethod
+    def phi_r3(e):
+        
+        eps = 0.1
+
+        if e > eps:
+            f = a3*e**3 - a3*eps**3
+
+        elif e < -eps:
+            f = a3*e**3 + a3*eps**3
+        
+        else:
+            f = 0
+        
+        return f
+
+    @staticmethod
+    def phi_c1(q):
+        e = 3*(k1*q + k2*q**3)
+        return e
+
+    @staticmethod
+    def phi_c2(q):
+        e = 100*(k1*q + k2*q**3)
+        return e
+
+    # nonlinear state equations
+    def f(self,t,x,u):
+
+        x_dot = np.zeros(x.shape)
+        q1,q2,p1,p2 = x[0], x[1], x[2], x[3]
+        x_dot[0] = p1/I_1 - p2/I_2 - self.phi_r3(self.phi_c1(q1))
+        x_dot[1] = p2/I_2 
+        x_dot[2] = u - self.phi_c1(q1) - self.phi_r1(p1/I_1)
+        x_dot[3] = self.phi_c1(q1) -self.phi_c2(q2) - self.phi_r2(p2/I_2)
+
+        return x_dot
+
+    # nonlinear observation equations
+    def g(self,t,x,u):
+        q1,q2,p1,p2 = x[0], x[1], x[2], x[3]
+        eta = self.phi(t,x,u)
+        x = np.array([q1,q2,p1,p2])
+        y = np.concatenate((x,eta))
+        return y 
+    
+    # auxiliary variables (outputs from nonlinear elements)
+    def phi(self,t,x,u):
+        '''
+        outputs the values of the auxiliary variables
+        '''
+        q1,q2,p1,p2 = x[0],x[1],x[2],x[3]
+        
+        eta = np.zeros(self.N_eta)
+        eta[0] = self.phi_r1(p1/I_1)
+        eta[1] = self.phi_c1(q1)
+        eta[2] = self.phi_r3(self.phi_c1(q1))
+        eta[3] = self.phi_c2(q2)
+        eta[4] = self.phi_r2(p1/I_2)
+
+        return eta
+
 
 ###########################################################################################
 
@@ -158,10 +269,107 @@ def sin_u_func(y,t):
     
     # return u
     # 1*signal.square(0.5 * t)
-    return np.sin(3*t) 
+    return 0.2*signal.square(1*t)
 
 if __name__== "__main__":
 
+    ################# HYBRID MODEL TEST ##############################################
+    plant2 = Plant1()
+    dfl1 = DFL(plant2, dt_data = 0.05, dt_control = 0.2)
+    # setattr(plant1, "g", Plant1.gkoop1)
+
+    dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 ,plot_sample = True )
+    dfl1.generate_hybrid_model()
+    dfl1.regress_H_cont_matrix()
+    # dfl1.generate_K_matrix()
+
+    x_0 = np.random.uniform(plant2.x_min,plant2.x_max)
+    # x_0 = np.array([0,0,0,0])
+    seed = np.random.randint(5)
+
+    np.random.seed(seed = seed)
+    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, rand_u_func, 10.0)
+    np.random.seed(seed = seed)
+    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, rand_u_func, 10.0,  continuous = True)
+    np.random.seed(seed = seed)
+    t, u_dfl_2, x_dfl_2, y_dfl_2 = dfl1.simulate_system_dfl(x_0, rand_u_func, 10.0, continuous = False)
+    np.random.seed(seed = seed)
+    t, u_hybrid, x_hybrid, y_hybrid = dfl1.simulate_system_hybrid(x_0, rand_u_func, 10.0)
+# 
+    # np.random.seed(seed = seed)
+    # t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, rand_u_func, 10.0)
+    # # t, u, x_koop1, y_koop = dfl1.simulate_system_koop(x_0, sin_u_func, 10.0)
+    
+    # np.random.seed(seed = seed)
+    # t, u_hybrid, x_hybrid, y_hybrid = dfl1.simulate_system_hybrid(x_0, rand_u_func, 10.0)
+
+    # dfl1.generate_N4SID_model()
+
+    fig, axs = plt.subplots(5, 1)
+    fig.suptitle('State variables', fontsize=16)
+    axs[0].plot(t, y_nonlin[:,0],'k', label = 'True')
+    axs[1].plot(t, y_nonlin[:,1],'k')
+    axs[2].plot(t, y_nonlin[:,2],'k')
+    axs[3].plot(t, y_nonlin[:,3],'k')
+    axs[4].plot(t, u_nonlin,'k')
+
+
+    axs[0].plot(t, x_dfl[:,0],'r', label = 'DFL')
+    axs[1].plot(t, x_dfl[:,1],'r')
+    axs[2].plot(t, x_dfl[:,2],'r')
+    axs[3].plot(t, x_dfl[:,3],'r')
+    axs[4].plot(t, u_dfl,'r')
+
+    axs[0].plot(t, x_dfl_2[:,0],'b--', label = 'DFL discrete')
+    axs[1].plot(t, x_dfl_2[:,1],'b--')
+    axs[2].plot(t, x_dfl_2[:,2],'b--')
+    axs[3].plot(t, x_dfl_2[:,3],'b--')
+    axs[4].plot(t, u_dfl_2,'b--')
+
+    axs[0].plot(t, y_hybrid[:,0],'g', label = 'Hybrid')
+    axs[1].plot(t, y_hybrid[:,1],'g')
+    axs[2].plot(t, y_hybrid[:,2],'g')
+    axs[3].plot(t, y_hybrid[:,3],'g')
+    axs[4].plot(t, u_hybrid,'g')
+
+    axs[0].set_ylabel('q1')
+    axs[1].set_ylabel('q2')
+    axs[2].set_ylabel('p1')
+    axs[3].set_ylabel('p2')
+    axs[4].set_ylabel('u')
+
+    axs[0].legend(loc='right')
+
+    fig, axs = plt.subplots(5, 1)
+    fig.suptitle('Auxilliary variables', fontsize=16)
+    axs[0].plot(t, y_nonlin[:,4],'k', label = 'True')
+    axs[1].plot(t, y_nonlin[:,5],'k')
+    axs[2].plot(t, y_nonlin[:,6],'k')
+    axs[3].plot(t, y_nonlin[:,7],'k')
+    axs[4].plot(t, y_nonlin[:,8],'k')
+
+    axs[0].plot(t, x_dfl[:,4],'r', label = 'DFL')
+    axs[1].plot(t, x_dfl[:,5],'r')
+    axs[2].plot(t, x_dfl[:,6],'r')
+    axs[3].plot(t, x_dfl[:,7],'r')
+    axs[4].plot(t, x_dfl[:,8],'r')
+
+    axs[0].set_ylabel('eR1')
+    axs[1].set_ylabel('eR2')
+    axs[2].set_ylabel('eC1')
+    axs[3].set_ylabel('eR3')
+    axs[4].set_ylabel('eC2')
+    axs[0].legend(loc='right')
+
+
+    # axs[0].plot(t, y_hybrid[:,0],'g')
+    # axs[1].plot(t, y_hybrid[:,1],'g')
+    # axs[2].plot(t, y_hybrid[:,2],'g')
+    # axs[3].plot(t, y_hybrid[:,3],'g')
+    # axs[4].plot(t, u_hybrid,'g')
+    
+    plt.show()
+    exit()
     ################# HYBRID MODEL TEST ##############################################
     plant1 = Plant1()
     dfl1 = DFL(plant1, dt_data = 0.05, dt_control = 0.2)
