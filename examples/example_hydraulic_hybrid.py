@@ -6,6 +6,14 @@ from dfl.dfl.mpc import *
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
+matplotlib.rcParams['font.family'] = "serif"
+plt.rcParams['font.serif'] = ['Times New Roman'] + plt.rcParams['font.serif']
+matplotlib.rcParams['mathtext.default'] = 'rm'
+matplotlib.rcParams['mathtext.fontset'] = 'cm'
+matplotlib.rcParams.update({'font.size': 14})
+matplotlib.rcParams['pdf.fonttype'] = 42
+
 from scipy import signal
 
 I_1 = 1.0
@@ -439,9 +447,14 @@ if __name__== "__main__":
     t, u_hybrid, x_hybrid, y_hybrid = dfl.simulate_system_hybrid(x_0, rand_u_func, 10.0)
 
     dfl.plant.N_eta_hybrid = 3
+        #To compare with the full set of measurements -> equivalence
     dfl.plant.P =  np.array([ [1., 0,  0,],
                               [0,  1., 0,],
                               [0,  0,  1.,]])
+
+    # TO illustrate what happens when Lemma 1 is not met
+    # dfl.plant.P =  np.array([ [1., 1,  0.,],
+    #                           [0,  1., 1,]])
 
     dfl.plant.A_cont_eta_hybrid =   pl.A_cont_eta.dot(np.linalg.pinv(dfl.plant.P))
     dfl.generate_hybrid_model()
@@ -452,40 +465,70 @@ if __name__== "__main__":
 
 
 
-    plot_state, plot_auxiliary = True, True
-    plot_auxiliary_algebraic = True
-
+    plot_state, plot_auxiliary = True, False
+    plot_auxiliary_algebraic = False
+    ''
     if plot_state == True:
         fig, axs = plt.subplots(4, 1)
-        fig.suptitle('State variables', fontsize=16)
-        axs[0].plot(t, y_nonlin[:,0],'k', label = 'True')
+        # fig.suptitle('State variables', fontsize=16)
+        
+        line_labels = ['True', 'DFL - Discrete regression', 'DFL - N4SID modified measurments',  'DFL - N4SID full measurements']
+
+        l1 = axs[0].plot(t, y_nonlin[:,0],'k')[0]# , label = 'True'
         axs[1].plot(t, y_nonlin[:,1],'k')
         axs[2].plot(t, y_nonlin[:,2],'k')
         axs[3].plot(t, u_nonlin,'k')
 
-        axs[0].plot(t, x_dfl[:,0],'r', label = 'DFL Discrete')
+        l2 = axs[0].plot(t, x_dfl[:,0],'r')[0] # , label = 'DFL - Discrete regression')
         axs[1].plot(t, x_dfl[:,1],'r')
         axs[2].plot(t, x_dfl[:,2],'r')
         axs[3].plot(t, u_dfl,'r')
 
-        axs[0].plot(t, y_hybrid_2[:,0],'b', label = 'DFL - N4SID')
-        axs[1].plot(t, y_hybrid_2[:,1],'b')
-        axs[2].plot(t, y_hybrid_2[:,2],'b')
-        axs[3].plot(t, u_hybrid_2,'b')
-
-        axs[0].plot(t, y_hybrid[:,0],'g', label = 'Hybrid order 3')
+        l3 = axs[0].plot(t, y_hybrid[:,0],'g')[0] #, label = 'DFL - N4SID modified measurments')
         axs[1].plot(t, y_hybrid[:,1],'g')
         axs[2].plot(t, y_hybrid[:,2],'g')
         axs[3].plot(t, u_hybrid,'g')
 
+        l4 = axs[0].plot(t, y_hybrid_2[:,0],'b')[0] #, label = 'DFL - N4SID full measurements')
+        axs[1].plot(t, y_hybrid_2[:,1],'b')
+        axs[2].plot(t, y_hybrid_2[:,2],'b')
+        axs[3].plot(t, u_hybrid_2,'b')
+
+        # Set the y labels usin latex notation eg r'$\mathit{x_{rb}}$ (m)'
+        axs[0].set_ylabel(r'$\mathit{q_1}$')
+        axs[1].set_ylabel(r'$\mathit{p_L}$')
+        axs[2].set_ylabel(r'$\mathit{p_F}$')
+        axs[3].set_ylabel(r'$\mathit{u}$')
+        
+        axs[3].set_xlabel(r'$\mathit{t}$')
+
+        # add legend
+        fig.legend(handles = [l1, l2, l3, l4],     # The line objects
+           labels=line_labels,   # The labels for each line
+           loc="upper center",   # Position of legend
+           borderaxespad=0.1,
+           fontsize=12)  
+
+        fig.align_ylabels()
+
+        # remove time from all but bottom subplot
+        axs[0].set_xticklabels([])
+        axs[1].set_xticklabels([])
+        axs[2].set_xticklabels([])
+
+        # add grid to each sublot
+        axs[0].grid()
+        axs[1].grid() 
+        axs[2].grid()
+        axs[3].grid()
+
+        plt.subplots_adjust(top=0.85,hspace = 0.05)
 
 
-        axs[0].set_ylabel('q_1')
-        axs[1].set_ylabel('p_L')
-        axs[2].set_ylabel('p_f')
-        axs[3].set_ylabel('u')
+        # axs[0].legend(loc='right')
 
-        axs[0].legend(loc='right')
+        # Put a legend to the right of the current axis
+        # axs[3].legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
     if plot_auxiliary == True:
         fig, axs = plt.subplots(3, 1)
