@@ -137,79 +137,75 @@ def sin_u_func(y,t):
     # return np.sin(3*t) 
 
 if __name__== "__main__":
-    plant1 = Plant1()
+    # plant1 = Plant1()
 
-    dfl1 = DFL(plant1)
-    setattr(plant1, "g", Plant1.gkoop1)
+    # dfl1 = DFL(plant1)
+    # setattr(plant1, "g", Plant1.gkoop1)
 
-    # ########## KOOPMAN MPC TEST
-    dfl1.generate_data_from_random_trajectories()
-    # dfl1.generate_H_matrix()
-    # dfl1.generate_N4SID_model()
-    dfl1.generate_K_matrix()
+    # # ########## KOOPMAN MPC TEST
+    # dfl1.generate_data_from_random_trajectories()
+    # # dfl1.generate_H_matrix()
+    # # dfl1.generate_N4SID_model()
+    # dfl1.generate_K_matrix()
 
-    x_0 = np.array([1,0])
-    T = 10.0
+    # x_0 = np.array([1,0])
+    # T = 10.0
 
-    # Objective function
-    Q = sparse.diags([1., 0., 0., 0.])
-    QN = Q
-    R = 0.01*sparse.eye(1)
+    # # Objective function
+    # Q = sparse.diags([1., 0., 0., 0.])
+    # QN = Q
+    # R = 0.01*sparse.eye(1)
 
-    # Initial and reference states
-    u_minus = np.zeros((dfl1.plant.N_u,1))
-    x0 = dfl1.plant.g(0.0, x_0, u_minus)
-    xr = np.array([0.5 ,0., 0., 0.])
+    # # Initial and reference states
+    # u_minus = np.zeros((dfl1.plant.N_u,1))
+    # x0 = dfl1.plant.g(0.0, x_0, u_minus)
+    # xr = np.array([0.5 ,0., 0., 0.])
 
-    x_min = np.array([-3.,-3.,-3.,-3.])
-    x_max = np.array([3.,3.,3.,3.])
+    # x_min = np.array([-3.,-3.,-3.,-3.])
+    # x_max = np.array([3.,3.,3.,3.])
 
-    # dummy reference trajectory
-    t_traj = np.arange(0,T,0.05)
-    x1_traj = np.sin(0.5*t_traj)
-    x_traj = np.vstack((x1_traj,0*x1_traj,0*x1_traj,0*x1_traj)).T
+    # # dummy reference trajectory
+    # t_traj = np.arange(0,T,0.05)
+    # x1_traj = np.sin(0.5*t_traj)
+    # x_traj = np.vstack((x1_traj,0*x1_traj,0*x1_traj,0*x1_traj)).T
+
+    # # mpc = MPC(dfl1.A_koop,
+    # #           dfl1.B_koop,
+    # #           x_min, x_max,
+    # #           plant1.u_min,
+    # #           plant1.u_max)
 
     # mpc = MPC(dfl1.A_koop,
     #           dfl1.B_koop,
     #           x_min, x_max,
     #           plant1.u_min,
-    #           plant1.u_max)
-
-    mpc = MPC(dfl1.A_koop,
-              dfl1.B_koop,
-              x_min, x_max,
-              plant1.u_min,
-              plant1.u_max,
-              N = 20)
+    #           plant1.u_max,
+    #           N = 20)
     
-    mpc.setup_new_problem(Q, QN, R, t_traj, x_traj, x0)
+    # mpc.setup_new_problem(Q, QN, R, t_traj, x_traj, x0)
 
-    x_0 = np.array([1,0])
-    t, u, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0,  mpc.control_function, T)
-    # t, u, x_koop1, y_koop = dfl1.simulate_system_koop(x_0, mpc.control_function, 10.0)
+    # x_0 = np.array([1,0])
+    # t, u, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0,  mpc.control_function, T)
+    # # t, u, x_koop1, y_koop = dfl1.simulate_system_koop(x_0, mpc.control_function, 10.0)
     
 
-    # mpc.control_function
-    fig, axs = plt.subplots(3, 1)
+    # # mpc.control_function
+    # fig, axs = plt.subplots(3, 1)
 
-    axs[0].plot(t, x_nonlin[:,0], 'b')
-    axs[0].plot(t_traj, x_traj[:,0], 'b--')
+    # axs[0].plot(t, x_nonlin[:,0], 'b')
+    # axs[0].plot(t_traj, x_traj[:,0], 'b--')
 
-    axs[1].plot(t, x_nonlin[:,1], 'r')
-    axs[2].plot(t, u[:,0], 'g')
+    # axs[1].plot(t, x_nonlin[:,1], 'r')
+    # axs[2].plot(t, u[:,0], 'g')
 
-    axs[2].set_xlabel('time')
+    # axs[2].set_xlabel('time')
     
-    axs[0].set_ylabel('x')
-    axs[1].set_ylabel('v')
-    axs[2].set_ylabel('u')
-    plt.show()
+    # axs[0].set_ylabel('x')
+    # axs[1].set_ylabel('v')
+    # axs[2].set_ylabel('u')
+    # plt.show()
 
-    exit()
-
-
-    dfl1.generate_data_from_random_trajectories()
-    dfl1.generate_H_matrix()
+    # exit()
 
     ################# HYBRID MODEL TEST ##############################################
     plant1 = Plant1()
@@ -226,18 +222,16 @@ if __name__== "__main__":
     seed = np.random.randint(5)
 
     np.random.seed(seed = seed)
-    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, rand_u_func, 10.0)
+    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, sin_u_func, 10.0)
     
     np.random.seed(seed = seed)
-    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, rand_u_func, 10.0)
+    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, sin_u_func, 10.0)
     # t, u, x_koop1, y_koop = dfl1.simulate_system_koop(x_0, sin_u_func, 10.0)
     
     np.random.seed(seed = seed)
-    t, u_hybrid, x_hybrid, y_hybrid = dfl1.simulate_system_hybrid(x_0, rand_u_func, 10.0)
+    t, u_hybrid, x_hybrid, y_hybrid = dfl1.simulate_system_hybrid(x_0, sin_u_func, 10.0)
 
-    # dfl1.generate_N4SID_model()
-
-    fig, axs = plt.subplots(4, 1)
+    fig, axs = plt.subplots(3, 1)
 
     axs[0].plot(t, y_nonlin[:,0], 'b')
     axs[0].plot(t, y_dfl[:,0] ,'b-.')
@@ -251,11 +245,11 @@ if __name__== "__main__":
     axs[2].plot(t, u_dfl,'r-.')
     axs[2].plot(t, u_hybrid,'b--')
 
-    axs[3].plot(t, y_dfl[:,2],'b-.')
-    axs[3].plot(t, x_hybrid[:,2] ,'r-.')
+    # axs[3].plot(t, y_dfl[:,2],'b-.')
+    # axs[3].plot(t, x_hybrid[:,2] ,'r-.')
 
-    axs[3].plot(t, y_dfl[:,3],'b.')
-    axs[3].plot(t, x_hybrid[:,3] ,'r.')
+    # axs[3].plot(t, y_dfl[:,3],'b.')
+    # axs[3].plot(t, x_hybrid[:,3] ,'r.')
 
     # axs[0].set_xlim(0, t_f)
     axs[2].set_xlabel('time')
