@@ -97,15 +97,14 @@ class Plant1(DFLDynamicPlant):
     def g(self,x,u,t):
         
         return x
-   
-    def gkoop1(self,t,x,u):
+
+    # observation including soil surface shape
+    def g_state_and_surface(self,t,x,u):
         x, z, v_x, v_z, gamma = x[0], x[1], x[2], x[3], x[4]
-        
         s, s_dash, s_dash_dash = self.get_s(x)
         D = s-z
-        F = self.Phi_soil(D,x, z,v_x,v_z)
-        # y = np.array([x,z,v_x,v_z,gamma, F[0],F[1],s, s_dash, s_dash_dash])
-        y = np.array([x,z,v_x,v_z,gamma, F[0],F[1]]) #, s_dash, s_dash_dash])
+        # F = self.Phi_soil(D,x, z,v_x,v_z)
+        y = np.array([x, z, v_x, v_z, gamma, s, s_dash, s_dash_dash])
 
         return y  
     
@@ -140,43 +139,42 @@ if __name__== "__main__":
     plant = Plant1()
     dfl = DFL(plant)
 
-    setattr(plant, "g", plant.gkoop1)
+    setattr(plant, "g", plant.g_state_and_surface)
 
     x_0 = np.array([0.0,0.0,0.0,0.0,0.0])
-    dfl.generate_data_from_random_trajectories(t_range_data = 5.0, n_traj_data = 100, x_0 = x_0, plot_sample = True)
-    dfl.generate_K_matrix()
-
+    dfl.generate_data_from_random_trajectories(t_range_data = 5.0, n_traj_data = 2, x_0 = x_0, plot_sample = True)
+    # dfl.generate_K_matrix()
+    print(dfl.Y_minus.shape)
    
     x_0 = np.array([0.0,0.0,0.0,0.0,0.0])
     t_f = 5.0
 
     t, u, x_nonlin, y_nonlin= dfl.simulate_system_nonlinear(x_0, zero_u_func, t_f)
-    t, u, x_koop1, y_koop = dfl.simulate_system_koop(x_0,zero_u_func, t_f)
+    # t, u, x_koop1, y_koop = dfl.simulate_system_koop(x_0,zero_u_func, t_f)
 
     fig, axs = plt.subplots(4, 1)   
     
     axs[0].plot(t, x_nonlin[:,0],'b', t, x_nonlin[:,1],'r')
-    axs[0].plot(t, x_koop1[:,0],'b--',  t, x_koop1[:,1],'r--')
+    # axs[0].plot(t, x_koop1[:,0],'b--',  t, x_koop1[:,1],'r--')
     axs[0].set_xlim(0, t_f)
     axs[0].set_xlabel('time')
     axs[0].set_ylabel('position states')
     axs[0].grid(True)
 
     axs[1].plot(t, x_nonlin[:,2],'b', t, x_nonlin[:,3],'r')
-    axs[1].plot(t, x_koop1[:,2],'b--',  t, x_koop1[:,3],'r--')
+    # axs[1].plot(t, x_koop1[:,2],'b--',  t, x_koop1[:,3],'r--')
     axs[1].set_xlim(0, t_f)
     axs[1].set_xlabel('time')
     axs[1].set_ylabel('velocity states')
     axs[1].grid(True)
 
     axs[2].plot(t, x_nonlin[:,4],'g')
-    axs[2].plot(t, x_koop1[:,4],'g--')
+    # axs[2].plot(t, x_koop1[:,4],'g--')
     axs[2].set_xlim(0, t_f)
     axs[2].set_xlabel('time')
     axs[2].set_ylabel('bucket filling')
     axs[2].grid(True)
 
-    print(u.shape)
     axs[3].plot(t, u[:,0,0],'k')
     axs[3].plot(t, u[:,0,1],'k--')
     axs[3].set_xlim(0, t_f)

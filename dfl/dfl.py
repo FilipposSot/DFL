@@ -50,7 +50,6 @@ class DFL():
 
         self.convert_DFL_continuous_to_discrete()
 
-
     def generate_DFL_disc_model(self,method = 'LS'):
         '''
         regress the H matrix for DFL model
@@ -177,7 +176,7 @@ class DFL():
                                                 np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
                                                 self.dt_data)
             
-        (_,A_disc_eta_hybrid ,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta_hybrid, 
+        (_,A_disc_eta_hybrid,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta_hybrid, 
                                           np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
                                                 self.dt_data)
 
@@ -188,7 +187,73 @@ class DFL():
         # A_til,B_til,C_til,D_til,_,S = ssid.N4SID(U,Y,NumURows,NumUCols,2)
         # print(xi_order)
         method = 'N4SID'
-        sys_id = system_identification(Y, U, method, SS_D_required = True, SS_fixed_order = int(xi_order)) #, IC='AICc') #
+        sys_id = system_identification(Y, U, method, SS_D_required = True, SS_fixed_order = int(xi_order)) #, IC='AICc')#
+
+
+        # SS_fixed_order = self.plant.N_eta,
+        A_til,B_til,C_til,D_til = sys_id.A, sys_id.B, sys_id.C, sys_id.D
+        
+        # print(A_til.shape)
+        # print(B_til.shape)
+        # print(C_til.shape)
+        # print(D_til.shape)
+
+        B_til_1 = B_til[:,:self.plant.N_x]
+        B_til_2 = B_til[:,self.plant.N_x:]
+        D_til_1 = D_til[:,:self.plant.N_x]
+        D_til_2 = D_til[:,self.plant.N_x:]
+
+        A1 = A_disc_x + A_disc_eta_hybrid.dot(D_til_1)
+        A2 = A_disc_eta_hybrid.dot(C_til)
+        B1 = B_disc_x+ A_disc_eta_hybrid.dot(D_til_2)
+
+        self.A_disc_hybrid_full =  np.block([[A1     ,  A2],
+                                             [B_til_1,  A_til ]])
+
+        # print(self.A_disc_hybrid_full)
+
+        self.B_disc_hybrid_full = np.block([[B1],
+                                       [B_til_2]])
+
+        self.C_til = C_til
+        self.D_til_1 = D_til_1
+        self.D_til_2 = D_til_2
+
+    def generate_hybrid_surface_model(self,xi_order):
+
+        U = np.concatenate((self.X_minus.reshape(-1, self.X_minus.shape[-1]),
+                            self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
+
+        Y_temp = self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]).T
+
+        Y = self.plant.P.dot(Y_temp)
+        
+        if len(Y.shape) == 1:
+            Y=Y.T
+            Y = np.expand_dims(Y, axis=0)
+
+        # (A_disc_x,_,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
+        #                                     np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
+        #                                     self.dt_data)
+        # B_disc_x = self.plant.B_cont_x*self.dt_data
+        # A_disc_eta_hybrid = self.plant.A_cont_eta_hybrid*self.dt_data
+
+        (A_disc_x, B_disc_x,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
+                                                np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
+                                                self.dt_data)
+            
+        (_,A_disc_eta_hybrid,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta_hybrid, 
+                                          np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
+                                                self.dt_data)
+
+        # print(A_disc_eta_hybrid)   
+        # NumURows = 200
+        # NumUCols = 1500
+
+        # A_til,B_til,C_til,D_til,_,S = ssid.N4SID(U,Y,NumURows,NumUCols,2)
+        # print(xi_order)
+        method = 'N4SID'
+        sys_id = system_identification(Y, U, method, SS_D_required = True, SS_fixed_order = int(xi_order)) #, IC='AICc')#
 
 
         # SS_fixed_order = self.plant.N_eta,
@@ -328,7 +393,7 @@ class DFL():
         if len(u.shape) > 1:
             u = u.flatten()
 
-        eta = np.dot(self.C_til, x[self.plant.N_x:]) + np.dot(self.D_til_1, x[:self.plant.N_x]) +  np.dot(self.D_til_2, u)
+        eta = np.dot(self.C_til, x[self.plant.N_x:]) + np.dot(self.D_til_1, x[:self.plant.N_x]) + np.dot(self.D_til_2, u)
 
         y = np.concatenate((x[:self.plant.N_x],eta))
 
