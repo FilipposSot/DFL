@@ -51,6 +51,7 @@ class MPC():
             q = np.hstack([-Q.dot(xr.T).T.flatten(), -QN.dot(xr[-1,:]),
                            np.zeros(self.N*self.nu)])
 
+
         return P, q
 
     def generate_constraints(self, x0):
@@ -91,6 +92,9 @@ class MPC():
 
         P, q = self.generate_objective(Q, QN, R, xr)
         A, l, u = self.generate_constraints(x0)
+
+        plt.spy(P,fillstyle='full')
+        plt.show()
 
         self.P = P
         self.q = q
@@ -148,3 +152,44 @@ class MPC():
             exit()
 
         return u
+
+
+if __name__== "__main__":
+
+    x_0 = np.array([1,0])
+    T = 10.0
+
+    A = np.array([[0.0 , 1.0],[-3, -1]]) + np.array([[1.0 , 0.0],[0.0, 1.0]]) 
+    B = np.array([[0.0],[1.0]])
+    
+    # Objective function
+    Q = sparse.diags([1., 0.])
+    QN = Q
+    R = 0.01*sparse.eye(1)
+
+    # Initial state 
+    u_minus = np.zeros((1,1))
+    x0 = np.array([0.0 , 1.0])
+
+    # state limits
+    x_min = np.array([-3., -3.])
+    x_max = np.array([3. , 3.])
+
+    # dummy reference trajectory
+    t_traj = np.arange(0,T,0.05)
+    x1_traj = np.sin(0.5*t_traj)
+    x_traj = np.vstack((x1_traj,0*x1_traj)).T
+
+    mpc = MPC(A,
+              B,
+              x_min, x_max,
+              -10.0,
+              10.0,
+              N = 10)
+    
+    mpc.setup_new_problem(Q, QN, R, t_traj, x_traj, x0)
+
+    x_0 = np.array([0.0, 1.0])
+    # t, u, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0,  mpc.control_function, T)
+    # t, u, x_koop1, y_koop = dfl1.simulate_system_koop(x_0, mpc.control_function, 10.0)
+    
