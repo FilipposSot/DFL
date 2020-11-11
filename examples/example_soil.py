@@ -26,7 +26,9 @@ class Plant1(DFLDynamicPlant):
         self.u_min = np.array([0.5, -1.0])
         self.u_max = np.array([1.0, -0.5])
 
-    def get_s(self,x):
+    def set_soil_surf():
+
+    def soil_surf_eval(self,x):
         '''
         Returns the soil surface parameters at a particular x value
         '''
@@ -69,6 +71,7 @@ class Plant1(DFLDynamicPlant):
         # print(D)
         F_soil = self.Phi_soil(D, x, z, v_x, v_z)
         F_noise =  np.random.normal(np.array([0.0,0.0]),np.array([0.1,0.1]))
+        
         # noise_ratio_0 = np.abs(F_soil[0]/F_noise[0])
         # noise_ratio_1 = np.abs(F_soil[1]/F_noise[1])
 
