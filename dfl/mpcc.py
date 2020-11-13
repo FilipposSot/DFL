@@ -232,7 +232,10 @@ class MPCC():
         # - linear dynamics constraint
         Ax_1 = sparse.kron(sparse.eye(self.N+1),-sparse.eye(self.nx)) # + sparse.kron(sparse.eye(self.N+1, k=-1), self.Ad)
         Ax_2 = np.zeros((self.nx*(self.N+1),self.nx*(self.N+1)))
-        
+        Bu = np.zeros(((self.N+1)*self.nx, (self.N+1)*self.nv))
+
+        # l_dyn = -x0
+
         for i in range(self.N):
             i_row_start = self.nx*i + self.nx 
             i_row_end = i_row_start + self.nx
@@ -241,15 +244,16 @@ class MPCC():
             i_col_end = i_col_start  + self.nx
 
             Ad = self.get_linearized_model(x_array[i,:])
-            
-            Ax_2[i_row_start:i_row_end,i_col_start:i_col_end] = Ad
+            Ax_2[i_row_start:i_row_end, i_col_start:i_col_end] = Ad
 
-        Ax = Ax_1 + Ax_2 
+            Bu[i_row_start:i_row_end, self.nv*i+ self.nv :self.nv*i + self.nv +self.nv ] = self.Bd
 
-        Bu = sparse.kron(sparse.hstack([sparse.csc_matrix((self.N+1,1)), sparse.vstack([sparse.csc_matrix((1, self.N)), sparse.eye(self.N)])]), self.Bd)
+        Ax = Ax_1 + Ax_2
+
+        # Bu = sparse.kron(sparse.hstack([sparse.csc_matrix((self.N+1,1)), sparse.vstack([sparse.csc_matrix((1, self.N)), sparse.eye(self.N)])]), self.Bd)
         # Bu = sparse.kron(sparse.vstack([sparse.csc_matrix((1, self.N)), sparse.eye(self.N)]), self.Bd)
 
-        A_dyn = sparse.hstack([Ax, Bu])
+        A_dyn = sparse.hstack([Ax, sparse.csc_matrix(Bu)])
         l_dyn = np.hstack([-x0, np.zeros(self.N*self.nx)])
         u_dyn = l_dyn
 
@@ -445,7 +449,7 @@ if __name__== "__main__":
                Bd,
                x_min, x_max,
                u_min, u_max,
-               N = 20)
+               N = 5)
     
     setattr(mpc, "path_eval", path.path_eval)
 
