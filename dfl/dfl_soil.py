@@ -26,20 +26,22 @@ np.set_printoptions(suppress = True)
 
 class DFLSoil():
     
-    def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1):
+    def __init__(self, dynamic_plant,
+                       dt_data = 0.05,
+                       dt_control = 0.05):
         
         self.plant = dynamic_plant
         self.dt_data = dt_data 
         self.dt_control = dt_control 
-        self.N_s = 3
+        self.n_s = 3
 
-        self.H_disc_x   = np.zeros((self.plant.N_eta,self.plant.N_x))
-        self.H_disc_eta = np.zeros((self.plant.N_eta,self.plant.N_eta)) 
-        self.H_disc_s   = np.zeros((self.plant.N_eta,self.N_s)) 
-        self.H_disc_u   = np.zeros((self.plant.N_eta,self.plant.N_u)) 
-        self.A_disc_x   = np.zeros((self.plant.N_x,self.plant.N_x))
-        self.A_disc_eta = np.zeros((self.plant.N_x,self.plant.N_eta))
-        self.B_disc_x   = np.zeros((self.plant.N_x,self.plant.N_u))
+        self.H_disc_x   = np.zeros((self.plant.n_eta,self.plant.n_x))
+        self.H_disc_eta = np.zeros((self.plant.n_eta,self.plant.n_eta)) 
+        self.H_disc_s   = np.zeros((self.plant.n_eta,self.n_s)) 
+        self.H_disc_u   = np.zeros((self.plant.n_eta,self.plant.n_u)) 
+        self.A_disc_x   = np.zeros((self.plant.n_x,self.plant.n_x))
+        self.A_disc_eta = np.zeros((self.plant.n_x,self.plant.n_eta))
+        self.B_disc_x   = np.zeros((self.plant.n_x,self.plant.n_u))
 
     def regress_model(self):
         '''
@@ -54,26 +56,65 @@ class DFLSoil():
 
         H_disc = lstsq(omega.T,Y.T,rcond=None)[0].T
         
-        self.H_disc_x   = H_disc[:,:self.plant.N_x]
-        self.H_disc_eta = H_disc[:, self.plant.N_x                                : self.plant.N_x + self.plant.N_eta]
-        self.H_disc_s   = H_disc[:, self.plant.N_x + self.plant.N_eta             : self.plant.N_x + self.plant.N_eta + self.N_s]
-        self.H_disc_u   = H_disc[:, self.plant.N_x + self.plant.N_eta  + self.N_s : self.plant.N_x + self.plant.N_eta + self.N_s + self.plant.N_u]
+        self.H_disc_x   = H_disc[:,:self.plant.n_x]
+        self.H_disc_eta = H_disc[:, self.plant.n_x                                : self.plant.n_x + self.plant.n_eta]
+        self.H_disc_s   = H_disc[:, self.plant.n_x + self.plant.n_eta             : self.plant.n_x + self.plant.n_eta + self.n_s]
+        self.H_disc_u   = H_disc[:, self.plant.n_x + self.plant.n_eta  + self.n_s : self.plant.n_x + self.plant.n_eta + self.n_s + self.plant.n_u]
 
         (self.A_disc_x, self.B_disc_x,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
-                                             np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
-                                            self.dt_data)
+                                                            np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
+                                                            self.dt_data)
         
         (_,self.A_disc_eta ,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta, 
-                                      np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
-                                            self.dt_data)
+                                                    np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
+                                                    self.dt_data)
+
+    def regress_model_no_surface(self):
+        '''
+        regress the H matrix for DFL model
+        '''
+        omega = np.concatenate((self.X_minus.reshape(-1, self.X_minus.shape[-1]),
+                                self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]),
+                                self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
+        
+        Y = self.Eta_plus.reshape(-1, self.Eta_plus.shape[-1]).T
+
+        H_disc = lstsq(omega.T,Y.T,rcond=None)[0].T
+        
+        self.H_disc_x   = H_disc[:,:self.plant.n_x]
+        self.H_disc_eta = H_disc[:, self.plant.n_x : self.plant.n_x + self.plant.n_eta]
+        self.H_disc_u   = H_disc[:, self.plant.n_x + self.plant.n_eta: self.plant.n_x + self.plant.n_eta +  self.plant.n_u]
+
+        (self.A_disc_x, self.B_disc_x,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
+                                                            np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
+                                                            self.dt_data)
+        
+        (_,self.A_disc_eta ,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta, 
+                                                    np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
+                                                    self.dt_data)
+
+    def linearize_soil_dynamics_no_surface(self, x_nom):
+      
+        A_lin =  np.block([[self.A_disc_x, self.A_disc_eta],
+                           [self.H_disc_x, self.H_disc_eta]])
+
+        B_lin = np.block([[self.B_disc_x],
+                          [self.H_disc_u]])
+
+        # constant bias term
+        K_lin = np.concatenate((np.zeros(self.plant.n_x),np.zeros(self.plant.n_eta)))
+
+        return A_lin, B_lin, K_lin
+
+
     def linearize_soil_dynamics(self, x_nom):
 
-        s_nom, s_dash_nom, s_dash_dash_nom, s_dash_dash_dash_nom = self.plant.soil_surf_eval(x_nom[0]+0.2)
+        s_nom, s_dash_nom, s_dash_dash_nom, s_dash_dash_dash_nom = self.plant.soil_surf_eval(x_nom[0])
 
         sigma_zero   =  np.array([s_nom, s_dash_nom, s_dash_dash_nom]) 
         sigma_zero_d =  np.array([s_dash_nom, s_dash_dash_nom, s_dash_dash_dash_nom])
 
-        T = np.zeros((self.N_s,self.plant.N_x))
+        T = np.zeros((self.n_s,self.plant.n_x))
         T[:,0] = 1.0
 
         H_disc_x_surf = self.H_disc_x + self.H_disc_s.dot(np.diag(sigma_zero_d)).dot(T)
@@ -87,11 +128,8 @@ class DFLSoil():
 
         # constant bias term
         K_lin_eta = self.H_disc_s.dot(sigma_zero) - self.H_disc_s.dot(sigma_zero_d)*x_nom[0]
-        K_lin = np.concatenate((np.zeros(self.plant.N_x),K_lin_eta))
+        K_lin = np.concatenate((np.zeros(self.plant.n_x),K_lin_eta))
 
-        print(A_lin)
-        print(B_lin)
-        print(K_lin)
         return A_lin, B_lin, K_lin
 
     def f_cont_dfl(self,t,xi,u):
@@ -99,8 +137,8 @@ class DFLSoil():
         if not isinstance(u,np.ndarray):
             u = np.array([u])
 
-        x   = xi[:self.plant.N_x]
-        eta = xi[self.plant.N_x:self.plant.N_x + self.plant.N_eta]
+        x   = xi[:self.plant.n_x]
+        eta = xi[self.plant.n_x:self.plant.n_x + self.plant.n_eta]
         
         x_dot   = np.dot(self.plant.A_cont_x,x) +  np.dot(self.plant.A_cont_eta, eta) + np.dot(self.plant.B_cont_x,u)
         eta_dot = np.dot(self.H_cont_x,x) +  np.dot(self.H_cont_eta, eta) + np.dot(self.H_cont_u,u)
@@ -124,15 +162,14 @@ class DFLSoil():
         if len(u.shape) > 1:
             u = u.flatten()
 
-        eta = np.dot(self.C_til, x[self.plant.N_x:]) + np.dot(self.D_til_1, x[:self.plant.N_x]) + np.dot(self.D_til_2, u)
+        eta = np.dot(self.C_til, x[self.plant.n_x:]) + np.dot(self.D_til_1, x[:self.plant.n_x]) + np.dot(self.D_til_2, u)
 
-        y = np.concatenate((x[:self.plant.N_x],eta))
+        y = np.concatenate((x[:self.plant.n_x],eta))
 
         # print(y.shape)
         return y
-
-    @staticmethod
-    def simulate_system(x_0, u_minus, t_f, dt, u_func, dt_control, f_func, g_func, continuous = True):
+    
+    def simulate_system(self, x_0, u_minus, t_f, dt, u_func, dt_control, f_func, g_func, continuous = True):
         '''
         Simulate a system in continuous time
         Arguments:
@@ -153,7 +190,8 @@ class DFLSoil():
         x_array = []
         u_array = []
         y_array = []
-        
+        s_array = []
+
         # initial state and 
         x_t = copy.copy(x_0)
         y_t = g_func(t, x_t, u_minus)
@@ -164,10 +202,17 @@ class DFLSoil():
         x_array.append(x_t)
         u_array.append([u_t])
         y_array.append(g_func(t,x_t,u_minus))
+        s_array.append(self.plant.soil_surf_eval(x_t[0]))
+
+        D_t = s_array[-1][0] - x_array[-1][1]
 
         t_control_last = 0
+        
         #Simulate the system
         while t < t_f:
+            
+            if (D_t < 0.01) and (x_t[3] > 0.0):
+                break
 
             if continuous:
                 r.set_f_params(u_t).set_jac_params(u_t)
@@ -186,6 +231,9 @@ class DFLSoil():
             x_array.append(x_t)
             u_array.append([u_t])
             y_array.append(y_t)
+            s_array.append(self.plant.soil_surf_eval(x_t[0]))
+
+            D_t = s_array[-1][0] - x_array[-1][1]
         # print(len(y_array))
         return np.array(t_array), np.array(u_array), np.array(x_array), np.array(y_array)
 
@@ -214,6 +262,9 @@ class DFLSoil():
 
         for i in range(n_traj_data):
             
+            x_surf, y_surf = self.plant.generate_random_surface()
+            self.plant.set_soil_surf(x_surf, y_surf)
+
             # define initial conitions and range of time
             t_0 = 0.0
             t_f = t_range_data
@@ -233,7 +284,9 @@ class DFLSoil():
             y_array = []
 
             t_control_last = -10000000
-            u_t = np.zeros(self.plant.N_u)  
+            u_t = np.zeros(self.plant.n_u)  
+
+            D_t = 0
 
             #simulate the system
             while r.successful() and r.t < t_f:
@@ -243,18 +296,25 @@ class DFLSoil():
                 x_t = r.integrate(r.t + self.dt_data)             
 
                 if r.t - t_control_last > self.dt_control:
+                    
                     t_control_last = r.t 
-                    u_t =  np.random.uniform(low = self.plant.u_min , high = self.plant.u_max)
+                    
+                    if D_t > 0.15:
+                        u_t =  np.random.uniform(low = self.plant.u_min , high = self.plant.u_max + np.array([0.0,0.7]))
+                    else:
+                        u_t =  np.random.uniform(low = self.plant.u_min , high = self.plant.u_max)
 
-                #these are the inherent variables if the system ie input and state
+                # these are the inherent variables if the system ie input and state
                 t_array.append(r.t)
                 x_array.append(x_t)
                 u_array.append([u_t])
 
-                #these describe additional observations such as auxiliary variables or measurements
+                # these describe additional observations such as auxiliary variables or measurements
                 eta_array.append(self.plant.phi(r.t,x_t,u_t))
                 s_array.append(self.plant.soil_surf_eval(x_t[0]))
                 y_array.append(self.plant.g(r.t,x_t,u_t))
+
+                D_t = s_array[-1][0] - x_array[-1][1]
 
             # eta_dot_array = np.gradient(np.array(eta_array),self.dt_data)[0]
 
@@ -277,7 +337,23 @@ class DFLSoil():
                 axs[2].set_ylabel('p1')
                 axs[3].set_ylabel('p2')
                 axs[4].set_ylabel('u')
+
+                fig, axs = plt.subplots(3, 1)
+                axs[0].plot(np.array(t_array), np.array(eta_array)[:,0], 'k')
+                axs[1].plot(np.array(t_array), np.array(eta_array)[:,1], 'k')
+                axs[2].plot(np.array(t_array), np.array(eta_array)[:,2], 'k')
                 
+                axs[2].set_xlabel('time')
+
+                axs[0].set_ylabel('F_x')
+                axs[1].set_ylabel('F_z')
+                axs[2].set_ylabel('gamma_dot')
+
+                fig, axs = plt.subplots(1, 1)
+                axs.plot(x_surf, y_surf, 'k')
+                axs.plot(np.array(x_array)[:,0],np.array(x_array)[:,1], 'b')
+                axs.axis('equal')
+
                 plt.show()
 
             Y_minus_data.append(y_array[:-1])
@@ -319,7 +395,7 @@ class DFLSoil():
 
     def simulate_system_nonlinear(self, x_0, u_func, t_f):
 
-        u_minus = np.zeros((self.plant.N_u,1))
+        u_minus = np.zeros((self.plant.n_u,1))
         t,u,x,y = self.simulate_system(x_0, u_minus, t_f, self.dt_data,
                                         u_func, self.dt_control, self.plant.f, self.plant.g,
                                         continuous = True)
