@@ -244,18 +244,18 @@ class PlantMinimal(DFLDynamicPlant):
         # friction like nonlinearity
         # e = np.sign(f)*f**2
         e = 0.25*(np.tanh(5*f)-np.tanh(f)) + 0.5*np.tanh(5*f) + 0.01*f
-        return e
+        return 0.2*e
 
     @staticmethod
     def phi_c_load_x(q):
-        thresh = 0.1
+        thresh = 0.3
 
         if np.abs(q) < thresh:
             e = k1*q
         else:
             e = k2*q -(k2 - k1)*thresh*np.sign(q)
 
-        return e
+        return 0.05*e
 
     @staticmethod
     def phi_r_load_z(f):
@@ -268,7 +268,7 @@ class PlantMinimal(DFLDynamicPlant):
     def phi_c_load_z(q):
         thresh = 0.1
 
-        e = k1*q + k2*q**3
+        e = 0.5*k1*q + k2*q**3
         # e = -0.01*np.sign(q)*q**2
         # if np.abs(q) < thresh:
         #     e = k1*q
@@ -492,7 +492,7 @@ if __name__== "__main__":
                 t, u_full, x_full, y_full = dfl.simulate_system_hybrid(x_0, rand_u_func, T_range)
              
                 #To compare with a bad set
-                dfl.plant.P =  np.array([[1, 2, 0, 0],
+                dfl.plant.P =  np.array([[1, 0, 0, 0],
                                          [0, 0, 1, 2]])
                 dfl.plant.A_cont_eta_hybrid =   pl.A_cont_eta.dot(np.linalg.pinv(dfl.plant.P))
                 dfl.generate_hybrid_model(xi_order = pl.N_eta)
@@ -516,17 +516,17 @@ if __name__== "__main__":
                             fig, axs = plt.subplots(5, 1,figsize=(7, 5))
                             # fig.suptitle('State variables', fontsize=16)
                             
-                            # line_labels = ['Full Nonlinear System',
-                            #                r'DFL-SID w/ sufficient measurments, $\mathit{M_{1}}$',  
-                            #                r'DFL-SID w/ insufficient measurements, $\mathit{M_{1,bad}}$']
+                            line_labels = ['Full Nonlinear System',
+                                           r'DFL-SID w/ sufficient measurments, $\mathit{M}$',  
+                                           r'DFL-SID w/ insufficient measurements, $\mathit{M_{bad}}$']
 
                             # line_labels = ['Full Nonlinear System',
                             #                'DFL-SID w/ reduced measurments',
                             #                'DFL-SID w/ full measurements']
 
-                            line_labels = ['Full Nonlinear System',
-                                           'DFL-SID',  
-                                           'N4SID']
+                            # line_labels = ['Full Nonlinear System',
+                            #                'DFL-SID',  
+                            #                'N4SID']
 
                             l1 = axs[0].plot(t, y_nonlin[:,0],colours[0],linestyle=linestyles[0])[0]# , label = 'True'
                             axs[1].plot(t, y_nonlin[:,1],colours[0],linestyle=linestyles[0])
@@ -553,16 +553,22 @@ if __name__== "__main__":
                             # axs[2].plot(t,  y_full[:,2],colours[2],linestyle=linestyles[2])
                             # axs[3].plot(t,  y_full[:,3],colours[2],linestyle=linestyles[2])
 
-                            l3 = axs[0].plot(t, y_sid[:,0],colours[2],linestyle=linestyles[2])[0] # , label = 'DFL - Discrete regression')
-                            axs[1].plot(t,      y_sid[:,1],colours[2],linestyle=linestyles[2])
-                            axs[2].plot(t,      y_sid[:,2],colours[2],linestyle=linestyles[2])
-                            axs[3].plot(t,      y_sid[:,3],colours[2],linestyle=linestyles[2])
+
+                            l3 = axs[0].plot(t,  y_bad[:,0],colours[2],linestyle=linestyles[2])[0] # , label = 'DFL - Discrete regression')
+                            axs[1].plot(t,  y_bad[:,1],colours[2],linestyle=linestyles[2])
+                            axs[2].plot(t,  y_bad[:,2],colours[2],linestyle=linestyles[2])
+                            axs[3].plot(t,  y_bad[:,3],colours[2],linestyle=linestyles[2])
+
+                            # l3 = axs[0].plot(t, y_sid[:,0],colours[2],linestyle=linestyles[2])[0] # , label = 'DFL - Discrete regression')
+                            # axs[1].plot(t,      y_sid[:,1],colours[2],linestyle=linestyles[2])
+                            # axs[2].plot(t,      y_sid[:,2],colours[2],linestyle=linestyles[2])
+                            # axs[3].plot(t,      y_sid[:,3],colours[2],linestyle=linestyles[2])
 
                             # Set the y labels usin latex notation eg r'$\mathit{x_{rb}}$ (m)'
                             axs[0].set_ylabel(r'$\mathit{x}$')
-                            axs[1].set_ylabel(r'$\mathit{z}$')
+                            axs[1].set_ylabel(r'$\mathit{y}$')
                             axs[2].set_ylabel(r'$\mathit{v_x}$')
-                            axs[3].set_ylabel(r'$\mathit{v_z}$')
+                            axs[3].set_ylabel(r'$\mathit{v_y}$')
                             axs[4].set_ylabel(r'$\mathit{u}$')
 
                             axs[4].set_xlabel(r'$\mathit{t}$')
@@ -596,19 +602,21 @@ if __name__== "__main__":
                             # axs[3].legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
                         if plot_auxiliary == True:
-                            fig, axs = plt.subplots(3, 1)
+                            fig, axs = plt.subplots(4, 1)
                             fig.suptitle('Auxilliary variables', fontsize=16)
                             axs[0].plot(t, y_nonlin[:,3],'k', label = 'True')
                             axs[1].plot(t, y_nonlin[:,4],'k')
                             axs[2].plot(t, y_nonlin[:,5],'k')
+                            axs[3].plot(t, y_nonlin[:,6],'k')
 
                             # axs[0].plot(t, x_dfl[:,3],'r', label = 'DFL')
                             # axs[1].plot(t, x_dfl[:,4],'r')
                             # axs[2].plot(t, x_dfl[:,5],'r')
 
-                            axs[0].set_ylabel('eRF')
-                            axs[1].set_ylabel('eRL')
-                            axs[2].set_ylabel('eCL')
+                            axs[0].set_ylabel('eRx')
+                            axs[1].set_ylabel('eCx')
+                            axs[2].set_ylabel('eRy')
+                            axs[3].set_ylabel('eCy')
 
                             axs[0].legend(loc='right')
 
@@ -625,20 +633,26 @@ if __name__== "__main__":
                             # eta[2] = self.phi_c_load(q_1)
 
                         if plot_auxiliary_algebraic == True:
-                            fig, axs = plt.subplots(3, 1)
+                            fig, axs = plt.subplots(4, 1)
                             fig.suptitle('Auxilliary variables', fontsize=16)
+                            
+                            axs[0].plot(y_nonlin[:,2], y_nonlin[:,4],'k.')
+                            axs[1].plot(y_nonlin[:,0], y_nonlin[:,5],'k.')
+                            axs[2].plot(y_nonlin[:,3], y_nonlin[:,6],'k.')
+                            axs[3].plot(y_nonlin[:,1], y_nonlin[:,7],'k.')
 
-                            axs[0].plot((1/I_F)*y_nonlin[:,2], y_nonlin[:,3],'k.', label = 'True')
-                            axs[1].plot((1/I_F)*y_nonlin[:,2]- (1/I_L)*y_nonlin[:,1], y_nonlin[:,4],'k.')
-                            axs[2].plot(y_nonlin[:,0], y_nonlin[:,5],'k.')
+                            # axs[0].plot((1/I_F)*y_nonlin[:,2], y_nonlin[:,3],'k.', label = 'True')
+                            # axs[1].plot((1/I_F)*y_nonlin[:,2]- (1/I_L)*y_nonlin[:,1], y_nonlin[:,4],'k.')
+                            # axs[2].plot(y_nonlin[:,0], y_nonlin[:,5],'k.')
 
                             # axs[0].plot((1/I_F)*x_dfl[:,2], x_dfl[:,3],'r.', label = 'DFL')
                             # axs[1].plot((1/I_F)*x_dfl[:,2]- (1/I_L)*x_dfl[:,1], x_dfl[:,4],'r.')
                             # axs[2].plot(x_dfl[:,0], x_dfl[:,5],'r.')
 
-                            axs[0].set_ylabel('eRF')
-                            axs[1].set_ylabel('eRL')
-                            axs[2].set_ylabel('eCL')
+                            axs[0].set_ylabel('eRx')
+                            axs[1].set_ylabel('eCx')
+                            axs[2].set_ylabel('eRy')
+                            axs[3].set_ylabel('eCy')
 
                             axs[0].legend(loc='right')
                         

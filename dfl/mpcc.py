@@ -442,7 +442,8 @@ class MPCC():
             # fig = plt.figure()
             # ax = fig.add_subplot(1, 1, 1)
             # ax.plot(x_optimal[:,0], x_optimal[:,1],'.', color='tab:blue')
-            # ax = self.draw_path(ax, x_optimal[0,-1], x_optimal[-1,-1])
+            # # ax = self.draw_path(ax, x_optimal[0,-1], x_optimal[-1,-1])
+            # # ax = self.draw_path(ax, -10, -8)
             # ax.axis('equal')
             # plt.show()
 

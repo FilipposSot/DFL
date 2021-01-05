@@ -140,7 +140,8 @@ class Plant1(DFLDynamicPlant):
         place hold soil force
         will be replaced by FEE
         '''
-        F =     (-D**2 - D*gamma - 10*D*np.sign(v_x)*v_x**2)*np.array([1.0,0.0])
+        # F =     (-D**2 - D*gamma - 10*D*np.sign(v_x)*v_x**2)*np.array([1.0,0.0])
+        F = (-D**2 -10*D*v_x)*np.array([1.0,0.0])
         F = F + ( D + D**3 + -10*D*v_z)*np.array([0.0,1.0])
         
         # F =     (-D**2 - 10*D*v_x)*np.array([1.0,0.0])
@@ -276,7 +277,7 @@ class Plant1(DFLDynamicPlant):
     def f(self,t,xi,u):
 
         eps_vx = 0.001
-        F_scale = 0.001
+        F_scale = 1.0
 
         x, z, v_x, v_z, gamma = xi[0], xi[1], xi[2], xi[3], xi[4]
         s, s_dash, s_dash_dash, s_dash_dash_dash = self.soil_surf_eval(x)
@@ -285,7 +286,7 @@ class Plant1(DFLDynamicPlant):
 
         x_dot = v_x
         z_dot = v_z
-        F_soil = self.Phi_soil(D, x, z, v_x, v_z, gamma, u)
+        F_soil = self.Phi_soil(D, x, z, v_x, v_z, gamma)
         # F_noise =  np.random.normal(np.array([0.0,0.0]),np.array([0.01,0.01]))
         F_net = F_scale*F_soil + u
         
@@ -334,7 +335,7 @@ class Plant1(DFLDynamicPlant):
         x, z, v_x, v_z, gamma = xi[0], xi[1], xi[2], xi[3], xi[4]
         s, s_dash, s_dash_dash, s_dash_dash_dash = self.soil_surf_eval(x)
         D = s - z
-        F_soil = self.Phi_soil(D, x, z, v_x, v_z, gamma, u)
+        F_soil = self.Phi_soil(D, x, z, v_x, v_z, gamma)
         
         eta[0] = F_soil[0]
         eta[1] = F_soil[1]
@@ -411,75 +412,77 @@ if __name__== "__main__":
     print(x_nonlin)
 
     # # generare training data
-    # dfl.generate_data_from_random_trajectories(t_range_data = 5.0,
-    #                                            n_traj_data = 20,
-    #                                            x_0 = xi_0,
-    #                                            plot_sample = True)
+    dfl.generate_data_from_random_trajectories(t_range_data = 5.0,
+                                               n_traj_data = 20,
+                                               x_0 = xi_0,
+                                               plot_sample = True)
     
-    # # regress the dfl (hybrid) soil model
-    # dfl.regress_model_no_surface()
+    # regress the dfl (hybrid) soil model
+    dfl.regress_model_no_surface()
 
-    # # generate a soil surface to test on. add it to the plant
-    # x_soil_points = np.array([0,0.25, 0.5,0.75,1.,1.25,1.5])
-    # y_soil_points = np.array([0, 0.1, 0.2,0.3 ,0.4,0.5,0.6])
-    # plant.set_soil_surf(x_soil_points, y_soil_points)
+    # generate a soil surface to test on. add it to the plant
+    x_soil_points = np.array([0,0.25, 0.5,0.75,1.,1.25,1.5])
+    y_soil_points = np.array([0, 0.1, 0.2,0.3 ,0.4,0.5,0.6])
+
+    x_soil_points, y_soil_points = plant.generate_random_surface()
+    plant.set_soil_surf(x_soil_points, y_soil_points)
     
-    # # define the path to be followed by MPCC
-    # x_path = np.array([0., 0.25, 0.5, 0.75, 1.])
-    # y_path = np.array([0.,-0.1 ,-0.1, -0.1 , 0.])
-    # spl_path = spline_path(x_path,y_path)
+    # define the path to be followed by MPCC
+    x_path = np.array([0., 0.25, 0.5, 0.75, 1.])
+    y_path = np.array([0.,-0.1 ,-0.1, -0.1 , 0.])
+    spl_path = spline_path(x_path,y_path)
 
-    # # define the MPCC constraints (states and auxiliary variables)
-    # # need to find a more elegant way to define constraints on auxiliary variables
-    # x_min = np.concatenate((plant.x_min, np.array([-10.,-10.,-10.])))
-    # x_max = np.concatenate((plant.x_max, np.array([ 10., 10., 10.])))
+    # define the MPCC constraints (states and auxiliary variables)
+    # need to find a more elegant way to define constraints on auxiliary variables
+    x_min = np.concatenate((plant.x_min, np.array([-10.,-10.,-10.])))
+    x_max = np.concatenate((plant.x_max, np.array([ 10., 10., 10.])))
 
-    # # define input constraints on the system
-    # u_min = np.array([0.0, -0.4])
-    # u_max = np.array([3.0,  1.0])
+    # define input constraints on the system
+    u_min = np.array([0.0, -0.4])
+    u_max = np.array([3.0,  1.0])
     
-    # # instantiate the MPCC object
-    # mpcc = MPCC(np.zeros((plant.n, plant.n)), np.zeros((plant.n, plant.n_u)),
-    #             x_min, x_max,
-    #             u_min, u_max,
-    #             dt = dfl.dt_data, N = 30)
+    # instantiate the MPCC object
+    mpcc = MPCC(np.zeros((plant.n, plant.n)), np.zeros((plant.n, plant.n_u)),
+                x_min, x_max,
+                u_min, u_max,
+                dt = dfl.dt_data, N = 30)
 
-    # # set the observation function, path object and linearization function
-    # setattr(plant, "g", plant.g_state_and_auxiliary)
-    # setattr(mpcc , "path_eval", spl_path.path_eval)
-    # setattr(mpcc , "get_linearized_model", dfl.linearize_soil_dynamics_no_surface)
-    # setattr(mpcc , "get_soil_surface", plant.soil_surf_eval)
+    # set the observation function, path object and linearization function
+    setattr(plant, "g", plant.g_state_and_auxiliary)
+    setattr(mpcc , "path_eval", spl_path.path_eval)
+    setattr(mpcc , "get_linearized_model", dfl.linearize_soil_dynamics_no_surface)
+    setattr(mpcc , "get_soil_surface", plant.soil_surf_eval)
 
-    # # define the MPCC cost matrices and coef.
-    # Q = sparse.diags([100., 100.])
-    # R = sparse.diags([.001, .001, .001])
-    # q_theta = .1
+    # define the MPCC cost matrices and coef.
+    Q = sparse.diags([100., 100.])
+    R = sparse.diags([.001, .001, .001])
+    q_theta = .1
 
-    # # Set the MPCC initial state (includes states, aux variables and path variable)
-    # x_0 = np.concatenate((xi_0, plant.phi(0.0, xi_0, np.array([0.,0.])), np.array([-10.0])))
+    # Set the MPCC initial state (includes states, aux variables and path variable)
+    x_0 = np.concatenate((xi_0, plant.phi(0.0, xi_0, np.array([0.,0.])), np.array([-10.0])))
     
-    # # set initial input (since input cost is differential)
-    # u_minus = np.array([0.0, 0.0, 0.0])
+    # set initial input (since input cost is differential)
+    u_minus = np.array([0.0, 0.0, 0.0])
 
-    # # sets up the new mpcc problem
-    # mpcc.setup_new_problem(Q, R, q_theta, x_0, u_minus)
+    # sets up the new mpcc problem
+    mpcc.setup_new_problem(Q, R, q_theta, x_0, u_minus)
     
-    # # simulate the nonlinear system with linearized mpcc
-    # t_f = 3.0
-    # t, u, x_nonlin, y = dfl.simulate_system_nonlinear(xi_0, mpcc.control_function, t_f)
+    # simulate the nonlinear system with linearized mpcc
+    t_f = 3.2
+    t, u, x_nonlin, y = dfl.simulate_system_nonlinear(xi_0, mpcc.control_function, t_f)
     
-    # # Plot
-    # fig = plt.figure()
-    # ax = fig.add_subplot(1, 1, 1)
-    # plt.plot(x_nonlin[:,0], x_nonlin[:,1], color='tab:blue')
-    # ax = mpcc.draw_path(ax, -10.0, -8.0)
-    # ax = plant.draw_soil(ax, 0.0, 1.0)
-    # ax.axis('equal')
-    # plt.show()
+    # Plot
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+    plt.plot(x_nonlin[:,0], x_nonlin[:,1], color='tab:blue')
+    ax = mpcc.draw_path(ax, -10.0, -8.0)
+    ax = plant.draw_soil(ax, 0.0, 1.0)
+    ax.axis('equal')
+    plt.show()
 
-    # solved, result  = mpcc.solve()
-    # x_optimal, u_optimal  = mpcc.extract_result(result)
-    # mpcc.plot_result(result)
+    solved, result  = mpcc.solve()
+    x_optimal, u_optimal  = mpcc.extract_result(result)
+    mpcc.plot_result(result)
 
     # exit()
     ##############################################################

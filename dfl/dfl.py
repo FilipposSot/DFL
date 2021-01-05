@@ -163,7 +163,7 @@ class DFL():
         Y = self.plant.P.dot(Y_temp)
         
         if len(Y.shape) == 1:
-            Y=Y.T
+            Y = Y.T
             Y = np.expand_dims(Y, axis=0)
 
         # (A_disc_x,_,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
@@ -179,6 +179,15 @@ class DFL():
         (_,A_disc_eta_hybrid,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta_hybrid, 
                                           np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
                                                 self.dt_data)
+
+        # (_,A_disc_eta,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta, 
+        #                           np.zeros(self.plant.N_x), np.zeros(self.plant.N_eta)),
+        #                                 self.dt_data)
+        # print(np.linalg.matrix_rank(A_disc_eta))
+        # print(self.plant.A_cont_eta)
+        # print(A_disc_eta)
+
+
 
         # print(A_disc_eta_hybrid)   
         # NumURows = 200
@@ -209,8 +218,6 @@ class DFL():
 
         self.A_disc_hybrid_full =  np.block([[A1     ,  A2],
                                              [B_til_1,  A_til ]])
-
-        # print(self.A_disc_hybrid_full)
 
         self.B_disc_hybrid_full = np.block([[B1],
                                        [B_til_2]])
