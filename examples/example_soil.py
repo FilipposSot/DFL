@@ -419,6 +419,8 @@ if __name__== "__main__":
     
     # regress the dfl (hybrid) soil model
     dfl.regress_model_no_surface()
+    
+    t, u, x_dfl, y_dfl = dfl.simulate_system_dfl(xi_0, control_u_func, t_f, continuous = False)
 
     # generate a soil surface to test on. add it to the plant
     x_soil_points = np.array([0,0.25, 0.5,0.75,1.,1.25,1.5])
@@ -484,7 +486,7 @@ if __name__== "__main__":
     x_optimal, u_optimal  = mpcc.extract_result(result)
     mpcc.plot_result(result)
 
-    # exit()
+
     ##############################################################
     # plant = Plant1()
     # dfl = DFL(plant)
@@ -504,22 +506,22 @@ if __name__== "__main__":
 
     fig, axs = plt.subplots(4, 1)   
     
-    axs[0].plot(t, x_nonlin[:,0],'b', t, x_nonlin[:,1],'r')
-    # axs[0].plot(t, x_koop1[:,0],'b--',  t, x_koop1[:,1],'r--')
+    # axs[0].plot(t, x_nonlin[:,0],'b', t, x_nonlin[:,1],'r')
+    axs[0].plot(t, x_dfl[:,0],'b--',  t, x_dfl[:,1],'r--')
     axs[0].set_xlim(0, t_f)
     axs[0].set_xlabel('time')
     axs[0].set_ylabel('position states')
     axs[0].grid(True)
 
-    axs[1].plot(t, x_nonlin[:,2],'b', t, x_nonlin[:,3],'r')
-    # axs[1].plot(t, x_koop1[:,2],'b--',  t, x_koop1[:,3],'r--')
+    # axs[1].plot(t, x_nonlin[:,2],'b', t, x_nonlin[:,3],'r')
+    axs[1].plot(t, x_dfl[:,2],'b--',  t, x_dfl[:,3],'r--')
     axs[1].set_xlim(0, t_f)
     axs[1].set_xlabel('time')
     axs[1].set_ylabel('velocity states')
     axs[1].grid(True)
 
-    axs[2].plot(t, x_nonlin[:,4],'g')
-    # axs[2].plot(t, x_koop1[:,4],'g--')
+    # axs[2].plot(t, x_nonlin[:,4],'g')
+    axs[2].plot(t, x_dfl[:,4],'g--')
     axs[2].set_xlim(0, t_f)
     axs[2].set_xlabel('time')
     axs[2].set_ylabel('bucket filling')

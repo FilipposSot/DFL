@@ -150,7 +150,13 @@ class DFLSoil():
         if not isinstance(u,np.ndarray):
             u = np.array([u])
 
-        y_plus = np.dot(self.A_disc_dfl,x) + np.dot(self.B_disc_dfl, u)
+        A_lin =  np.block([[self.A_disc_x, self.A_disc_eta],
+                           [self.H_disc_x, self.H_disc_eta]])
+
+        B_lin = np.block([[self.B_disc_x],
+                          [self.H_disc_u]])
+        
+        y_plus = np.dot(A_lin,x) + np.dot(B_lin, u)
 
         return y_plus
         
@@ -404,7 +410,7 @@ class DFLSoil():
         
     def simulate_system_dfl(self, x_0, u_func, t_f, continuous = True):
 
-        u_minus = np.zeros((self.plant.N_u,1))
+        u_minus = np.zeros((self.plant.n_u,1))
         eta_0 = self.plant.phi(0.0, x_0, u_minus)
         xi_0 = np.concatenate((x_0,eta_0))
         

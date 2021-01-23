@@ -93,7 +93,7 @@ class MPCC():
         self.x_max = np.concatenate((x_max,np.array([0.0]))) 
        
         self.u_min = np.concatenate((u_min,np.array([0.001]))) 
-        self.u_max = np.concatenate((u_max,np.array([1.0]))) 
+        self.u_max = np.concatenate((u_max,np.array([0.1]))) 
 
         self.prob = osqp.OSQP()
 
@@ -251,8 +251,10 @@ class MPCC():
         lineq = np.hstack([np.kron(np.ones(self.N+1), self.x_min), u_minus, np.kron(np.ones(self.N), self.u_min)])
         uineq = np.hstack([np.kron(np.ones(self.N+1), self.x_max), u_minus, np.kron(np.ones(self.N), self.u_max)])
         
-        for i in range(self.N+1):
-            uineq[1+self.nx*i],_,_,_ = self.get_soil_surface(x_array[i,0])
+        # for i in range(self.N+1):
+        #     uineq[1+self.nx*i],_,_,_ = self.get_soil_surface(x_array[i,0])
+        # print(lineq)
+        # print(uineq)
 
         # exit()
         # lineq = np.hstack([np.kron(np.ones(self.N+1), self.x_min), u_minus, np.kron(np.ones(self.N), self.u_min)])
@@ -270,9 +272,9 @@ class MPCC():
 
         u_array = np.zeros((self.N,self.nv))
 
-        u_array[:,0] =  0.0*np.linspace(0,1,self.N)
-        u_array[:,1] =  0.0*np.linspace(0,1,self.N)
-        u_array[:,2] =  0.0*np.ones(self.N)
+        u_array[:,0] = 0.*np.ones(self.N) #0.0*np.linspace(0,1,self.N)
+        u_array[:,1] = 0.*np.ones(self.N) #0.0*np.linspace(0,1,self.N)
+        u_array[:,2] = 0.*np.ones(self.N) #0.1*np.ones(self.N)
 
         x_array = np.zeros((self.N+1,self.nx))
         x_array[0,:] = x0
@@ -291,6 +293,24 @@ class MPCC():
 
             x_array[i+1,:] = Ad.dot(x_array[i,:]) + Bd.dot(u_array[i,:])
 
+        # plt.plot(x_array[:,0])
+        # plt.plot(x_array[:,1])
+        # plt.show()
+
+        # plt.plot(x_array[:,2])
+        # plt.plot(x_array[:,3])
+        # plt.show()
+
+        # plt.plot(x_array[:,4])
+        # plt.plot(x_array[:,5])
+        # plt.show()
+
+        # plt.plot(x_array[:,6])
+        # plt.show()
+
+        # plt.plot(x_array[:,7])
+        # plt.show()
+
         for j in range(self.max_init_its):
 
             self.temp_val = j
@@ -298,9 +318,14 @@ class MPCC():
             x_array_old = x_array[:]
             u_array_old = u_array[:]
 
-            P, q = self.generate_contouring_objective(self.Q, self.R, self.q_theta, x_array)
-            A, l, u = self.generate_contouring_constraints(x0, u_minus, x_array)      
+            plt.plot(x_array[:,0])
+            plt.plot(x_array[:,1])
+            plt.show()
 
+            P, q = self.generate_contouring_objective(self.Q, self.R, self.q_theta, x_array)
+            A, l, u = self.generate_contouring_constraints(x0, u_minus, x_array) 
+
+     
             prob = osqp.OSQP()
             prob.setup(P, q, A, l, u, warm_start = True, verbose = False)
             
@@ -318,6 +343,27 @@ class MPCC():
             
             if delta_u_norm < 0.001:
                 break
+        
+        fig, axs = plt.subplots(5,1, figsize=(8,10))
+
+        axs[0] = self.draw_path(axs[0], x_array[0,-1], x_array[-1,-1])
+
+        axs[0].plot(x_array[:,0],x_array[:,1],marker=".")
+        # axs[0].plot(x_array[:,1],marker=".")
+
+        axs[1].plot(x_array[:,2],marker=".")
+        axs[1].plot(x_array[:,3],marker=".")
+
+        axs[2].plot(x_array[:,4],marker=".")
+        axs[2].plot(x_array[:,5],marker=".")
+
+        axs[3].plot(x_array[:,5],marker=".")
+        
+        axs[4].plot(u_array[:,0],marker=".")
+        axs[4].plot(u_array[:,1],'--',marker=".")
+
+
+        plt.show()
 
         return x_array, u_array
 
@@ -342,7 +388,14 @@ class MPCC():
         # print(x_array[:,:7])
 
         P, q = self.generate_contouring_objective(self.Q, self.R, self.q_theta, x_array)
+        
+        print(x0.shape)
+        print(u_minus.shape)
+        print(x_array.shape)
+
         A, l, u = self.generate_contouring_constraints(x0, u_minus, x_array)
+
+
 
         self.u_array = u_array[:]
         self.x_array = x_array[:]
@@ -353,9 +406,11 @@ class MPCC():
         self.l = copy.copy(l)
         self.u = copy.copy(u)
 
-        self.prob.setup(P, q, A, l, u, warm_start = False, verbose = False)
+        self.prob.setup(P, q, A, l, u, warm_start = False, verbose = False, polish = 1)
         solved, result  = self.solve()
         self.plot_result(result)
+
+        # exit()
 
         # if solved:
         #     print("SOLVED!")
@@ -368,28 +423,38 @@ class MPCC():
     def update_problem(self, xi0, u_minus):
 
         x0 = np.concatenate((xi0, np.array([self.x_array[0,-1] + self.dt*u_minus[-1]])))
+
+        print("xi_0: ",x0 )
+        print("u_miuns: ",u_minus )
         # x0 = np.concatenate((xi0,np.expand_dims(self.x_array[0,-1],axis=0)))
         x_array = self.x_array[:]
+        
+        # print(x0.shape)
+        # print(u_minus.shape)
+        # print(x_array.shape)
 
         P, q = self.generate_contouring_objective(self.Q, self.R, self.q_theta, x_array)
         A, l, u = self.generate_contouring_constraints(x0, u_minus, x_array)
-        
+
         # print((P!=self.P).nnz==0) 
         # print((A!=self.A).nnz==0) 
         # print(P.todense())
         # print(self.P)
         # print(type(sparse.csc_matrix(P)))
         # print("########## updating matrices ###########")
-        # print(l.shape)
-        # print(u.shape)
-        # print(q.shape)
 
         # self.prob.update(l = l, u = u, q = q )
         # self.prob.update(Px = P.todense())
-        # self.prob.update(Ax = A.data)
+        # # self.prob.update(Ax = A.data)
+        
+        # print(P.shape)
+        # print(q.shape)
+        # print(l.shape)
+        # print(A.shape)
+        # print(u.shape)
 
         self.prob = osqp.OSQP()
-        self.prob.setup(P, q, A, l, u, warm_start = False, verbose = False)
+        self.prob.setup(P, q, A, l, u,  warm_start = False, verbose = False, polish = 1)
 
 
     def solve(self):
@@ -425,7 +490,7 @@ class MPCC():
         for i in range(len(theta)):
             x[i],y[i] = self.path_eval(theta[i])
         
-        ax.plot(x, y, 'r--')
+        ax.plot(x, y, 'r--',marker='o')
 
         return ax
 
@@ -438,14 +503,16 @@ class MPCC():
             x_optimal, u_optimal  = self.extract_result(result)
             u = u_optimal[0,:self.nu]
             self.u_minus = u_optimal[0,:self.nv]
+            
+            print("optimal input:", self.u_minus )
 
-            # fig = plt.figure()
-            # ax = fig.add_subplot(1, 1, 1)
-            # ax.plot(x_optimal[:,0], x_optimal[:,1],'.', color='tab:blue')
-            # # ax = self.draw_path(ax, x_optimal[0,-1], x_optimal[-1,-1])
-            # # ax = self.draw_path(ax, -10, -8)
-            # ax.axis('equal')
-            # plt.show()
+            fig = plt.figure()
+            ax = fig.add_subplot(1, 1, 1)
+            ax.plot(x_optimal[:,0], x_optimal[:,1],'.', color='tab:blue')
+            ax = self.draw_path(ax, x_optimal[0,-1], x_optimal[-1,-1])
+            # ax = self.draw_path(ax, -10, -8)
+            ax.axis('equal')
+            plt.show()
 
 
             # Depth_array, _, _, _ = self.get_soil_surface(x_optimal[:,0])
@@ -454,7 +521,6 @@ class MPCC():
     
             self.x_array = copy.copy(x_optimal)
 
-            print(self.u_minus )
             # self.plot_result(result)
             return u
 
