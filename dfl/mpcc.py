@@ -93,7 +93,7 @@ class MPCC():
         self.x_max = np.concatenate((x_max,np.array([0.0]))) 
        
         self.u_min = np.concatenate((u_min,np.array([0.001]))) 
-        self.u_max = np.concatenate((u_max,np.array([0.1]))) 
+        self.u_max = np.concatenate((u_max,np.array([0.5]))) 
 
         self.prob = osqp.OSQP()
 
@@ -318,13 +318,8 @@ class MPCC():
             x_array_old = x_array[:]
             u_array_old = u_array[:]
 
-            plt.plot(x_array[:,0])
-            plt.plot(x_array[:,1])
-            plt.show()
-
             P, q = self.generate_contouring_objective(self.Q, self.R, self.q_theta, x_array)
             A, l, u = self.generate_contouring_constraints(x0, u_minus, x_array) 
-
      
             prob = osqp.OSQP()
             prob.setup(P, q, A, l, u, warm_start = True, verbose = False)
@@ -506,13 +501,13 @@ class MPCC():
             
             print("optimal input:", self.u_minus )
 
-            fig = plt.figure()
-            ax = fig.add_subplot(1, 1, 1)
-            ax.plot(x_optimal[:,0], x_optimal[:,1],'.', color='tab:blue')
-            ax = self.draw_path(ax, x_optimal[0,-1], x_optimal[-1,-1])
-            # ax = self.draw_path(ax, -10, -8)
-            ax.axis('equal')
-            plt.show()
+            # fig = plt.figure()
+            # ax = fig.add_subplot(1, 1, 1)
+            # ax.plot(x_optimal[:,0], x_optimal[:,1],'.', color='tab:blue')
+            # ax = self.draw_path(ax, x_optimal[0,-1], x_optimal[-1,-1])
+            # # ax = self.draw_path(ax, -10, -8)
+            # ax.axis('equal')
+            # plt.show()
 
 
             # Depth_array, _, _, _ = self.get_soil_surface(x_optimal[:,0])
