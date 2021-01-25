@@ -44,9 +44,9 @@ class DFL():
         Eta_dot = self.eta_dot_data.reshape(-1, self.eta_dot_data.shape[-1])
 
         self.H_cont = lstsq(np.array(Xi,dtype='float'),np.array(Eta_dot,dtype='float'),rcond=None)[0].T
-        self.H_cont_x   = self.H_cont[:,:self.plant.N_x]
-        self.H_cont_eta = self.H_cont[:,self.plant.N_x:self.plant.N_x+self.plant.N_eta]
-        self.H_cont_u   = self.H_cont[:,self.plant.N_x+self.plant.N_eta:self.plant.N_x+self.plant.N_eta+self.plant.N_u]
+        self.H_cont_x   = self.H_cont[:,:self.plant.n_x]
+        self.H_cont_eta = self.H_cont[:,self.plant.n_x:self.plant.n_x+self.plant.n_eta]
+        self.H_cont_u   = self.H_cont[:,self.plant.n_x+self.plant.n_eta:self.plant.n_x+self.plant.n_eta+self.plant.n_u]
 
         self.convert_DFL_continuous_to_discrete()
 
@@ -63,48 +63,27 @@ class DFL():
         if method == 'LS':
             H_disc = lstsq(omega.T,Y.T,rcond=None)[0].T
             
-            H_disc_x   = H_disc[:,:self.plant.N_x]
-            H_disc_eta = H_disc[:,self.plant.N_x:self.plant.N_x+self.plant.N_eta]
-            H_disc_u   = H_disc[:,self.plant.N_x+self.plant.N_eta:self.plant.N_x+self.plant.N_eta+self.plant.N_u]
+            H_disc_x   = H_disc[:,:self.plant.n_x]
+            H_disc_eta = H_disc[:,self.plant.n_x:self.plant.n_x+self.plant.n_eta]
+            H_disc_u   = H_disc[:,self.plant.n_x+self.plant.n_eta:self.plant.n_x+self.plant.n_eta+self.plant.n_u]
 
             (A_disc_x, B_disc_x,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
-                                                np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
+                                                np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
                                                 self.dt_data)
-            
+            # check: changed n_u to n_eta
             (_,A_disc_eta ,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta, 
-                                          np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
+                                          np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
                                                 self.dt_data)
-
-            # print(B_discB)
-            # B_disc_x = self.plant.B_cont_x*self.dt_data
-            # print(B_disc_x)
-            # A_disc_eta = self.plant.A_cont_eta*self.dt_data
-
-            # print(A_disc_eta_2)
-            # print(A_disc_eta)
-
-            # print(self.plant.A_cont_x.shape)
-            # print(self.plant.A_cont_eta.shape)
-            # print(self.plant.B_cont_x.shape)
-            # print(np.zeros((self.plant.N_eta+self.plant.N_u,self.plant.N_eta+self.plant.N_u+self.plant.N_eta)).shape)
 
             # F = np.block([[self.plant.A_cont_x,self.plant.A_cont_eta,self.plant.B_cont_x],
             #               [np.zeros((self.plant.N_eta+self.plant.N_u,self.plant.N_eta+self.plant.N_u+self.plant.N_eta))]])
             # print(expm(F*self.dt_data))
-
-
 
             self.A_disc_dfl =  np.block([[A_disc_x  , A_disc_eta],
                                                  [H_disc_x  , H_disc_eta]])
 
             self.B_disc_dfl = np.block([[B_disc_x],
                                     [H_disc_u]])
-            # print(self.A_disc_dfl)
-            # print(self.B_disc_dfl)
-            # sys = control.StateSpace(self.A_disc_dfl, self.B_disc_dfl,np.zeros(self.plant.N_x+self.plant.N_eta), np.zeros(self.plant.N_u),dt=True)
-            # Wc  = control.gram(sys,'c')
-            # print('Controllability grammian:', Wc)
-            # print('Controllability Matrix Rank:',np.linalg.matrix_rank(control.ctrb(self.A_disc_dfl,self.B_disc_dfl)))
 
     def convert_DFL_continuous_to_discrete(self):
 
@@ -123,9 +102,6 @@ class DFL():
 
         self.A_disc_dfl = A_disc
         self.B_disc_dfl = B_disc
-
-        # B_x_disc = self.plant.B_x*self.dt_data
-        # A_eta_hybrid_disc = self.plant.A_eta_hybrid*self.dt_data
 
     def regress_K_matrix(self):
 
@@ -166,51 +142,24 @@ class DFL():
             Y = Y.T
             Y = np.expand_dims(Y, axis=0)
 
-        # (A_disc_x,_,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
-        #                                     np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
-        #                                     self.dt_data)
-        # B_disc_x = self.plant.B_cont_x*self.dt_data
-        # A_disc_eta_hybrid = self.plant.A_cont_eta_hybrid*self.dt_data
-
         (A_disc_x, B_disc_x,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
-                                                np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
+                                                np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
                                                 self.dt_data)
             
         (_,A_disc_eta_hybrid,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta_hybrid, 
-                                          np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
+                                          np.zeros(self.plant.n_x), np.zeros(self.plant.n_eta)),
                                                 self.dt_data)
 
-        # (_,A_disc_eta,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta, 
-        #                           np.zeros(self.plant.N_x), np.zeros(self.plant.N_eta)),
-        #                                 self.dt_data)
-        # print(np.linalg.matrix_rank(A_disc_eta))
-        # print(self.plant.A_cont_eta)
-        # print(A_disc_eta)
-
-
-
-        # print(A_disc_eta_hybrid)   
-        # NumURows = 200
-        # NumUCols = 1500
-
-        # A_til,B_til,C_til,D_til,_,S = ssid.N4SID(U,Y,NumURows,NumUCols,2)
-        # print(xi_order)
         method = 'N4SID'
         sys_id = system_identification(Y, U, method, SS_D_required = True, SS_fixed_order = int(xi_order)) #, IC='AICc')#
-
 
         # SS_fixed_order = self.plant.N_eta,
         A_til,B_til,C_til,D_til = sys_id.A, sys_id.B, sys_id.C, sys_id.D
         
-        # print(A_til.shape)
-        # print(B_til.shape)
-        # print(C_til.shape)
-        # print(D_til.shape)
-
-        B_til_1 = B_til[:,:self.plant.N_x]
-        B_til_2 = B_til[:,self.plant.N_x:]
-        D_til_1 = D_til[:,:self.plant.N_x]
-        D_til_2 = D_til[:,self.plant.N_x:]
+        B_til_1 = B_til[:,:self.plant.n_x]
+        B_til_2 = B_til[:,self.plant.n_x:]
+        D_til_1 = D_til[:,:self.plant.n_x]
+        D_til_2 = D_til[:,self.plant.n_x:]
 
         A1 = A_disc_x + A_disc_eta_hybrid.dot(D_til_1)
         A2 = A_disc_eta_hybrid.dot(C_til)
@@ -225,81 +174,14 @@ class DFL():
         self.C_til = C_til
         self.D_til_1 = D_til_1
         self.D_til_2 = D_til_2
-
-    def generate_hybrid_surface_model(self,xi_order):
-
-        U = np.concatenate((self.X_minus.reshape(-1, self.X_minus.shape[-1]),
-                            self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
-
-        Y_temp = self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]).T
-
-        Y = self.plant.P.dot(Y_temp)
-        
-        if len(Y.shape) == 1:
-            Y=Y.T
-            Y = np.expand_dims(Y, axis=0)
-
-        # (A_disc_x,_,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
-        #                                     np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
-        #                                     self.dt_data)
-        # B_disc_x = self.plant.B_cont_x*self.dt_data
-        # A_disc_eta_hybrid = self.plant.A_cont_eta_hybrid*self.dt_data
-
-        (A_disc_x, B_disc_x,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
-                                                np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
-                                                self.dt_data)
-            
-        (_,A_disc_eta_hybrid,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta_hybrid, 
-                                          np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
-                                                self.dt_data)
-
-        # print(A_disc_eta_hybrid)   
-        # NumURows = 200
-        # NumUCols = 1500
-
-        # A_til,B_til,C_til,D_til,_,S = ssid.N4SID(U,Y,NumURows,NumUCols,2)
-        # print(xi_order)
-        method = 'N4SID'
-        sys_id = system_identification(Y, U, method, SS_D_required = True, SS_fixed_order = int(xi_order)) #, IC='AICc')#
-
-
-        # SS_fixed_order = self.plant.N_eta,
-        A_til,B_til,C_til,D_til = sys_id.A, sys_id.B, sys_id.C, sys_id.D
-        
-        # print(A_til.shape)
-        # print(B_til.shape)
-        # print(C_til.shape)
-        # print(D_til.shape)
-
-        B_til_1 = B_til[:,:self.plant.N_x]
-        B_til_2 = B_til[:,self.plant.N_x:]
-        D_til_1 = D_til[:,:self.plant.N_x]
-        D_til_2 = D_til[:,self.plant.N_x:]
-
-        A1 = A_disc_x + A_disc_eta_hybrid.dot(D_til_1)
-        A2 = A_disc_eta_hybrid.dot(C_til)
-        B1 = B_disc_x+ A_disc_eta_hybrid.dot(D_til_2)
-
-        self.A_disc_hybrid_full =  np.block([[A1     ,  A2],
-                                             [B_til_1,  A_til ]])
-
-        # print(self.A_disc_hybrid_full)
-
-        self.B_disc_hybrid_full = np.block([[B1],
-                                       [B_til_2]])
-
-        self.C_til = C_til
-        self.D_til_1 = D_til_1
-        self.D_til_2 = D_til_2
-
 
     def f_cont_dfl(self,t,xi,u):
 
         if not isinstance(u,np.ndarray):
             u = np.array([u])
 
-        x   = xi[:self.plant.N_x]
-        eta = xi[self.plant.N_x:self.plant.N_x + self.plant.N_eta]
+        x   = xi[:self.plant.n_x]
+        eta = xi[self.plant.n_x:self.plant.n_x + self.plant.n_eta]
         
         x_dot   = np.dot(self.plant.A_cont_x,x) +  np.dot(self.plant.A_cont_eta, eta) + np.dot(self.plant.B_cont_x,u)
         eta_dot = np.dot(self.H_cont_x,x) +  np.dot(self.H_cont_eta, eta) + np.dot(self.H_cont_u,u)
@@ -352,19 +234,6 @@ class DFL():
 
         y = np.dot(self.C_disc_sid, x) + np.dot(self.D_disc_sid, u)
         
-        # if len(y.shape) > 1:
-        #     print(y.shape)
-        #     print(self.C_disc_sid.shape)
-        #     print(self.D_disc_sid.shape)
-        #     print(x.shape)
-        #     print(u.shape)
-
-        #     print(self.C_disc_sid.dot(x).shape)
-        #     print(self.D_disc_sid.dot(u).shape)
-        #     print('---------------------')
-
-
-        # print(y.shape)
         return y
     
     def g_disc_sid(self,t,x,u):
@@ -377,19 +246,6 @@ class DFL():
 
         y = np.dot(self.C_disc_sid, x) + np.dot(self.D_disc_sid, u)
         
-        # if len(y.shape) > 1:
-        #     print(y.shape)
-        #     print(self.C_disc_sid.shape)
-        #     print(self.D_disc_sid.shape)
-        #     print(x.shape)
-        #     print(u.shape)
-
-        #     print(self.C_disc_sid.dot(x).shape)
-        #     print(self.D_disc_sid.dot(u).shape)
-        #     print('---------------------')
-
-
-        # print(y.shape)
         return y
     
     def g_disc_hybrid(self,t,x,u):
@@ -404,7 +260,6 @@ class DFL():
 
         y = np.concatenate((x[:self.plant.N_x],eta))
 
-        # print(y.shape)
         return y
 
     @staticmethod
@@ -462,7 +317,7 @@ class DFL():
             x_array.append(x_t)
             u_array.append([u_t])
             y_array.append(y_t)
-        # print(len(y_array))
+
         return np.array(t_array), np.array(u_array), np.array(x_array), np.array(y_array)
 
     def generate_data_from_random_trajectories(self, t_range_data = 10.0, n_traj_data = 50,
@@ -507,7 +362,7 @@ class DFL():
             y_array = []
 
             t_control_last = -10000000
-            u_t = np.zeros(self.plant.N_u)  
+            u_t = np.zeros(self.plant.n_u)  
 
             #simulate the system
             while r.successful() and r.t < t_f:
@@ -535,23 +390,23 @@ class DFL():
                                            window_length = 5, polyorder = 3,
                                            deriv = 1, axis=0)/self.dt_data
 
-            if plot_sample and i == 0:
-                fig, axs = plt.subplots(5, 1)
-                axs[0].plot(np.array(t_array), np.array(x_array)[:,0], 'k')
-                axs[1].plot(np.array(t_array), np.array(x_array)[:,1], 'k')
-                axs[2].plot(np.array(t_array), np.array(x_array)[:,2], 'k')
-                axs[3].plot(np.array(t_array), np.array(x_array)[:,3], 'k')
-                axs[4].plot(np.array(t_array), np.array(u_array)[:,0], 'k')
+            # if plot_sample and i == 0:
+            #     fig, axs = plt.subplots(5, 1)
+            #     axs[0].plot(np.array(t_array), np.array(x_array)[:,0], 'k')
+            #     axs[1].plot(np.array(t_array), np.array(x_array)[:,1], 'k')
+            #     axs[2].plot(np.array(t_array), np.array(x_array)[:,2], 'k')
+            #     axs[3].plot(np.array(t_array), np.array(x_array)[:,3], 'k')
+            #     axs[4].plot(np.array(t_array), np.array(u_array)[:,0], 'k')
                 
-                axs[4].set_xlabel('time')
+            #     axs[4].set_xlabel('time')
 
-                axs[0].set_ylabel('q1')
-                axs[1].set_ylabel('q2')
-                axs[2].set_ylabel('p1')
-                axs[3].set_ylabel('p2')
-                axs[4].set_ylabel('u')
+            #     axs[0].set_ylabel('q1')
+            #     axs[1].set_ylabel('q2')
+            #     axs[2].set_ylabel('p1')
+            #     axs[3].set_ylabel('p2')
+            #     axs[4].set_ylabel('u')
                 
-                plt.show()
+            #     plt.show()
 
             Y_minus_data.append(y_array[:-1])
             U_minus_data.append(u_array[:-1])
@@ -588,7 +443,7 @@ class DFL():
 
     def simulate_system_nonlinear(self, x_0, u_func, t_f):
 
-        u_minus = np.zeros((self.plant.N_u,1))
+        u_minus = np.zeros((self.plant.n_u,1))
         t,u,x,y = self.simulate_system(x_0, u_minus, t_f, self.dt_data,
                                         u_func, self.dt_control, self.plant.f, self.plant.g,
                                         continuous = True)
@@ -597,7 +452,7 @@ class DFL():
         
     def simulate_system_dfl(self, x_0, u_func, t_f, continuous = True):
 
-        u_minus = np.zeros((self.plant.N_u,1))
+        u_minus = np.zeros((self.plant.n_u,1))
         eta_0 = self.plant.phi(0.0, x_0, u_minus)
         xi_0 = np.concatenate((x_0,eta_0))
         
@@ -614,17 +469,17 @@ class DFL():
 
     def simulate_system_koop(self, x_0, u_func, t_f):
 
-        u_minus = np.zeros((self.plant.N_u,1))
+        u_minus = np.zeros((self.plant.n_u,1))
         xi_0 = self.plant.g(0.0, x_0, u_minus)
 
         t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
-                                        u_func,self.dt_control, self.f_koop, self.plant.g,
+                                        u_func,self.dt_control, self.f_disc_koop, self.plant.g,
                                         continuous = False)
         return t, u, xi, y 
 
     def simulate_system_hybrid(self, x_0, u_func, t_f):
 
-        u_minus = np.zeros((self.plant.N_u,1))
+        u_minus = np.zeros((self.plant.n_u,1))
         xi_0 = self.get_best_initial_hybrid(x_0, u_func, t_f)
         t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
                                         u_func, self.dt_control, self.f_disc_hybrid, self.g_disc_hybrid,
@@ -634,7 +489,7 @@ class DFL():
     
     def get_best_initial_hybrid(self, x_0, u_func, t_f):
 
-        u_0 = np.zeros((self.plant.N_u,1))
+        u_0 = np.zeros((self.plant.n_u,1))
         eta_0 = self.plant.phi_hybrid(0.0, x_0, u_0)
         xi_0 = np.linalg.pinv(self.C_til).dot(eta_0 - self.D_til_1.dot(x_0) -self.D_til_2.dot(u_0)[:,0])
 
@@ -644,7 +499,7 @@ class DFL():
 
     def simulate_system_sid(self, x_0, u_func, t_f):
 
-        u_minus = np.zeros((self.plant.N_u,1))
+        u_minus = np.zeros((self.plant.n_u,1))
         xi_0 = np.linalg.pinv(self.C_disc_sid).dot(x_0)  #self.get_best_initial_sid(x_0, u_func, t_f)
         t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
                                         u_func, self.dt_control, self.f_disc_sid, self.g_disc_sid,

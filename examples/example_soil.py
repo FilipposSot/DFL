@@ -9,11 +9,6 @@ import matplotlib.pyplot as plt
 
 from scipy.interpolate import splprep, splrep, splev, splint
 
-# T_RANGE_DATA = 1.0
-# DT_DATA = 0.05
-# N_TRAJ_DATA = 20
-# X_INIT_MIN = np.array([0.0,0.0,0.0])
-# X_INIT_MAX = np.array([1.0,1.0,1.0])
 def cot(x):
     return 1.0/np.tan(x)
 
@@ -196,19 +191,10 @@ def control_u_func(y,t):
     u[1] = -0.5
     return u
 
-# def rand_u_func 
-#                     if D_t > 0.15:
-#                         u_t =  np.random.uniform(low = self.plant.u_min , high = self.plant.u_max + np.array([0.0,0.7]))
-#                     else:
-#                         u_t =  np.random.uniform(low = self.plant.u_min , high = self.plant.u_max)
-
-                # these are the inherent
-
 if __name__== "__main__":
 
     # initialize the excavation system plant
     plant = Plant1()
-
 
     # generate a soil surface to test on. add it to the plant
     x_soil_points = np.array([0,0.25, 0.5,0.75 ,1. ,1.25, 1.5])

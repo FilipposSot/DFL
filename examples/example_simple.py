@@ -17,20 +17,20 @@ class Plant1(DFLDynamicPlant):
     
     def __init__(self):
         
-        self.N_x = 2
-        self.N_eta = 2
-        self.N_u = 1
+        self.n_x = 2
+        self.n_eta = 2
+        self.n_u = 1
 
-        self.N = self.N_x + self.N_eta
+        self.n = self.n_x + self.n_eta
 
         # User defined matrices for DFL
-        self.A_x  = np.array([[0.0, 1.0],
+        self.A_cont_x  = np.array([[0.0, 1.0],
                               [0.0, 0.0]])
 
-        self.A_eta = np.array([[0.0, 0.0],
+        self.A_cont_eta = np.array([[0.0, 0.0],
                                [-1/m,-1/m]])
 
-        self.B_x = np.array([[0.0],[1.0]])
+        self.B_cont_x = np.array([[0.0],[1.0]])
 
         # Limits for inputs and states
         self.x_min = np.array([-2.0,-2.0])
@@ -40,9 +40,9 @@ class Plant1(DFLDynamicPlant):
         self.u_max = np.array([ 2.5])
 
         # Hybrid model
-        self.N_eta_hybrid = 1
-        self.A_eta_hybrid = np.array([[0.0],
-                                     [-1/m]])
+        self.P =  np.array([[1, 1]])
+
+        self.A_cont_eta_hybrid =   self.A_cont_eta.dot(np.linalg.pinv(self.P))
 
 
     # functions defining constituitive relations for this particular system
@@ -105,7 +105,7 @@ class Plant1(DFLDynamicPlant):
         '''
         q,v = x[0],x[1]
         
-        eta = np.zeros(self.N_eta)
+        eta = np.zeros(self.n_eta)
         eta[0] = self.phi_c1(q)
         eta[1] = self.phi_r1(v)
 
@@ -118,7 +118,7 @@ class Plant1(DFLDynamicPlant):
         outputs the values of the auxiliary variables
         '''
         q,v = x[0],x[1]
-        eta = np.zeros(self.N_eta)
+        eta = np.zeros(self.n_eta)
         eta[0] = self.phi_c1(q) + self.phi_r1(v)
 
         return eta
@@ -207,15 +207,14 @@ if __name__== "__main__":
 
     # exit()
 
-    ################# HYBRID MODEL TEST ##############################################
+    ################# DFL MODEL TEST ##############################################
     plant1 = Plant1()
     dfl1 = DFL(plant1, dt_data = 0.05, dt_control = 0.2)
-    setattr(plant1, "g", Plant1.gkoop1)
+    setattr(plant1, "g", Plant1.gkoop2)
 
     dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
-    dfl1.generate_hybrid_model()
-    dfl1.generate_H_matrix()
-    dfl1.generate_K_matrix()
+    dfl1.generate_DFL_disc_model()
+    dfl1.regress_K_matrix()
 
     # x_0 = np.random.uniform(plant1.x_init_min,plant1.x_init_max)
     x_0 = np.array([0,0])
@@ -225,33 +224,23 @@ if __name__== "__main__":
     t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, sin_u_func, 10.0)
     
     np.random.seed(seed = seed)
-    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, sin_u_func, 10.0)
-    # t, u, x_koop1, y_koop = dfl1.simulate_system_koop(x_0, sin_u_func, 10.0)
+    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, sin_u_func, 10.0,continuous = False)
+    t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, sin_u_func, 10.0)
     
-    np.random.seed(seed = seed)
-    t, u_hybrid, x_hybrid, y_hybrid = dfl1.simulate_system_hybrid(x_0, sin_u_func, 10.0)
-
     fig, axs = plt.subplots(3, 1)
 
     axs[0].plot(t, y_nonlin[:,0], 'b')
     axs[0].plot(t, y_dfl[:,0] ,'b-.')
-    axs[0].plot(t, y_hybrid[:,0] ,'b--')
+    axs[0].plot(t, y_koop[:,0] ,'b--')
 
     axs[1].plot(t, y_nonlin[:,1],'r')
     axs[1].plot(t, y_dfl[:,1],'r-.')
-    axs[1].plot(t, y_hybrid[:,1] ,'r--')
+    axs[1].plot(t, y_koop[:,1] ,'r--')
   
     axs[2].plot(t, u_nonlin,'g')
     axs[2].plot(t, u_dfl,'r-.')
-    axs[2].plot(t, u_hybrid,'b--')
+    axs[2].plot(t, u_koop,'b--')
 
-    # axs[3].plot(t, y_dfl[:,2],'b-.')
-    # axs[3].plot(t, x_hybrid[:,2] ,'r-.')
-
-    # axs[3].plot(t, y_dfl[:,3],'b.')
-    # axs[3].plot(t, x_hybrid[:,3] ,'r.')
-
-    # axs[0].set_xlim(0, t_f)
     axs[2].set_xlabel('time')
     
     axs[0].set_ylabel('x')
@@ -259,66 +248,3 @@ if __name__== "__main__":
     axs[2].set_ylabel('u')
 
     plt.show()
-
-    exit()
-
-    # ##################################################################
-    # dfl1.generate_H_matrix()
-    # dfl1.generate_K_matrix()
-
-    # dfl2 = DFL(plant2)
-    # dfl2.generate_data_from_random_trajectories()
-    # dfl2.generate_K_matrix()
-    
-    # t_f = 5.0
-    # N_tests = 100
-    # # x_0 = np.array([1.0,1.0])
-    # error_koopman = np.array([0,0])
-    # error_dfl = np.array([0,0])
-
-
-    # for i in range(N_tests):
-
-    #     x_0 = np.random.uniform(plant1.x_init_min,plant1.x_init_max)
-    #     t, u, x_nonlin = dfl1.simulate_system_nonlinear(x_0, zero_u_func, t_f)
-    #     t, u, x_dfl = dfl1.simulate_system_dfl(x_0, zero_u_func, t_f)
-    #     t, u, x_koop1 = dfl1.simulate_system_koop(x_0, zero_u_func, t_f)
-    #     t, u, x_koop2 = dfl2.simulate_system_koop(x_0, zero_u_func, t_f)
-
-    #     error_koopman1 =+ np.mean(np.power(x_nonlin - x_koop1[:,0:2],2),axis = 0)
-    #     error_koopman2 =+ np.mean(np.power(x_nonlin - x_koop2[:,0:2],2),axis = 0)
-    #     error_dfl     =+ np.mean(np.power(x_nonlin -  x_dfl[:,0:2],2),axis = 0)
-
-    # print('Koopman Error',error_koopman1)
-    # print('Koopman Error 2',error_koopman2)
-    # print('DFL Error', error_dfl)
-
-    # fig, axs = plt.subplots(2, 1)
-    
-    # axs[0].plot(t, x_nonlin[:,0], 'b')
-    # # axs[0].plot(t, x_dfl[:,0] ,'b-.')
-    # axs[0].plot(t, x_koop1[:,0] ,'b.')
-    # axs[0].plot(t, x_koop2[:,0] ,'b--')
-
-    # axs[1].plot(t, x_nonlin[:,1],'r')
-    # # axs[0].plot(t, x_dfl[:,1],'r-.')
-    # axs[1].plot(t, x_koop1[:,1] ,'r.')
-    # axs[1].plot(t, x_koop2[:,1] ,'r--')
-
-    # axs[0].set_xlim(0, t_f)
-    # axs[1].set_xlabel('time')
-
-    # axs[0].set_ylabel('state 1')
-    # axs[1].set_ylabel('state 2')
-
-    # axs[0].grid(True)
-    # axs[1].grid(True)
-
-    # # axs[1].plot(t, u)
-    # # axs[1].set_ylabel('input')
-
-    # fig.tight_layout()
-    # plt.show()
-
-    # plt.matshow(dfl2.A_koop-np.eye(35))
-    # plt.show()
