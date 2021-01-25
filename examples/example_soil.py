@@ -201,21 +201,6 @@ if __name__== "__main__":
     y_soil_points = np.array([0, 0.0, 0.0, 0.0 ,0.0, 0.0, 0.0])
     plant.set_soil_surf(x_soil_points, y_soil_points)
 
-    # fig = plt.figure()
-    # ax = fig.add_subplot(1, 1, 1)
-
-    # for i in range(5):
-
-    #     x, y = plant.generate_random_surface()
-    #     y = y - y[0]
-    #     plt.plot(x, y, color='tab:blue')
-
-    # ax.axis('equal')
-    # plt.show()
-    # exit()
-
-
-
     # create the dfl object with the digging plant
     dfl = DFLSoil(plant)
     
@@ -228,7 +213,7 @@ if __name__== "__main__":
     t_f = 15.0
     t, u, x_nonlin, y_nonlin= dfl.simulate_system_nonlinear(xi_0, control_u_func, t_f)
 
-    print(x_nonlin)
+    
 
     # # generare training data
     dfl.generate_data_from_random_trajectories(t_range_data = 5.0,
@@ -236,7 +221,8 @@ if __name__== "__main__":
                                                x_0 = xi_0,
                                                plot_sample = True)
     
-    # regress the dfl (hybrid) soil model
+    # regress the dfl soil model
+    # Here we don't include the shape of the soil surface
     dfl.regress_model_no_surface()
     
     t, u, x_dfl, y_dfl = dfl.simulate_system_dfl(xi_0, control_u_func, t_f, continuous = False)
@@ -306,22 +292,7 @@ if __name__== "__main__":
     mpcc.plot_result(result)
 
 
-    ##############################################################
-    # plant = Plant1()
-    # dfl = DFL(plant)
-
-    # setattr(plant, "g", plant.g_state_and_surface)
-
-    # x_0 = np.array([0.0,0.0,0.0,0.0,0.0])
-    # dfl.generate_data_from_random_trajectories(t_range_data = 5.0, n_traj_data = 2, x_0 = x_0, plot_sample = True)
-    # # dfl.generate_K_matrix()
-    # print(dfl.Y_minus.shape)
-   
-    # x_0 = np.array([0.0,0.0,0.0,0.0,0.0])
-    # t_f = 5.0
-
-    # t, u, x_nonlin, y_nonlin= dfl.simulate_system_nonlinear(x_0, zero_u_func, t_f)
-    # # t, u, x_koop1, y_koop = dfl.simulate_system_koop(x_0,zero_u_func, t_f)
+    #########################  PLOTTING  ####################################
 
     fig, axs = plt.subplots(4, 1)   
     

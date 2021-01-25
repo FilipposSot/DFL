@@ -64,8 +64,6 @@ class DFLSoil():
                                 Eta_minus.reshape(-1, Eta_minus.shape[-1]),
                                 U_minus.reshape(-1, U_minus.shape[-1])),axis=1).T
         
-        print(omega.shape)
-
         Y = Eta_plus.reshape(-1, Eta_plus.shape[-1]).T
 
         H_disc = lstsq(omega.T,Y.T,rcond=None)[0].T
@@ -199,90 +197,6 @@ class DFLSoil():
         # print( np.absolute(np.linalg.eig(self.K_x)[0]) )
         # print( self.K_x )
 
-
-    # def generate_hybrid_model(self,X, Eta, U, S):
-
-    #     X_minus   = X[:,:-1,:]
-    #     Eta_minus = Eta[:,:-1,:]
-    #     U_minus   = U[:,:-1,:]
-    #     S_minus   = S[:,:-1,:]
-
-    #     X_plus    = X[:,1:,:]
-    #     Eta_plus  = Eta[:,1:,:]
-    #     U_plus    = U[:,1:,:]
-    #     S_plus    = S[:,1:,:]
-
-    #     Omega = np.concatenate((X_minus.reshape(-1, X_minus.shape[-1]),
-    #                             U_minus.reshape(-1, U_minus.shape[-1])),axis=1).T
-
-    #     Y_temp = Eta_minus.reshape(-1, Eta_minus.shape[-1]).T
-
-    #     Y = copy.copy(Y_temp)
-        
-    #     if len(Y.shape) == 1:
-    #         Y = Y.T
-    #         Y = np.expand_dims(Y, axis=0)
-
-    #     # (A_disc_x,_,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
-    #     #                                     np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
-    #     #                                     self.dt_data)
-    #     # B_disc_x = self.plant.B_cont_x*self.dt_data
-    #     # A_disc_eta_hybrid = self.plant.A_cont_eta_hybrid*self.dt_data
-
-    #     (A_disc_x, B_disc_x,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
-    #                                             np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
-    #                                             self.dt_data)
-            
-    #     (_,A_disc_eta_hybrid,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta_hybrid, 
-    #                                       np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
-    #                                             self.dt_data)
-
-    #     # (_,A_disc_eta,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta, 
-    #     #                           np.zeros(self.plant.N_x), np.zeros(self.plant.N_eta)),
-    #     #                                 self.dt_data)
-    #     # print(np.linalg.matrix_rank(A_disc_eta))
-    #     # print(self.plant.A_cont_eta)
-    #     # print(A_disc_eta)
-
-
-
-    #     # print(A_disc_eta_hybrid)   
-    #     # NumURows = 200
-    #     # NumUCols = 1500
-
-    #     # A_til,B_til,C_til,D_til,_,S = ssid.N4SID(U,Y,NumURows,NumUCols,2)
-    #     # print(xi_order)
-    #     method = 'N4SID'
-    #     sys_id = system_identification(Y, U, method, SS_D_required = True, SS_fixed_order = int(self.plant.n_eta)) #, IC='AICc')#
-
-
-    #     # SS_fixed_order = self.plant.N_eta,
-    #     A_til,B_til,C_til,D_til = sys_id.A, sys_id.B, sys_id.C, sys_id.D
-        
-    #     # print(A_til.shape)
-    #     # print(B_til.shape)
-    #     # print(C_til.shape)
-    #     # print(D_til.shape)
-
-    #     B_til_1 = B_til[:,:self.plant.n_x]
-    #     B_til_2 = B_til[:,self.plant.n_x:]
-    #     D_til_1 = D_til[:,:self.plant.n_x]
-    #     D_til_2 = D_til[:,self.plant.n_x:]
-
-    #     A1 = A_disc_x + A_disc_eta_hybrid.dot(D_til_1)
-    #     A2 = A_disc_eta_hybrid.dot(C_til)
-    #     B1 = B_disc_x+ A_disc_eta_hybrid.dot(D_til_2)
-
-    #     self.A_disc_hybrid_full =  np.block([[A1     ,  A2],
-    #                                          [B_til_1,  A_til ]])
-
-    #     self.B_disc_hybrid_full = np.block([[B1],
-    #                                    [B_til_2]])
-
-    #     self.C_til = C_til
-    #     self.D_til_1 = D_til_1
-    #     self.D_til_2 = D_til_2
-
     def linearize_soil_dynamics_no_surface(self, x_nom):
       
         A_lin =  np.block([[self.A_disc_x, self.A_disc_eta],
@@ -293,14 +207,6 @@ class DFLSoil():
 
         # constant bias term
         K_lin = np.concatenate((np.zeros(self.plant.n_x),np.zeros(self.plant.n_eta)))
-
-        # A_lin = copy.copy(self.A_disc_hybrid_full)
-        # B_lin = copy.copy(self.B_disc_hybrid_full)
-        # print(A_lin)
-        # print(B_lin)
-        # exit()
-
-        # K_lin = np.zeros(40)
 
         return   A_lin , B_lin , K_lin
 
