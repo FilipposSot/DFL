@@ -100,178 +100,17 @@ class Plant1(DFLDynamicPlant):
         '''
         return np.diag([1.,1.])
 
-    # @staticmethod
-    # def Phi_soil(D, x, z, v_x, v_z, q, u):
-    #     '''
-    #     place hold soil force
-    #     will be replaced by FEE
-    #     '''
-    #     # This is the rake angle
-    #     rho = np.pi/3
-
-    #     theta_v = np.arctan2(v_z,v_x)
-    #     v_mag = np.sqrt(v_x**2 + v_z**2)
-
-    #     # added propeties:
-    #     K_stiff = 100
-    #     B_pen = 100
-
-    #     # These are soil-tool properties
-    #     gamma = 1.0
-    #     g = 1.0
-    #     c = 1.0
-    #     c_a = 1.0
-
-        
-        
-    #     # F =     (-D**2 - 10*D*v_x)*np.array([1.0,0.0])
-    #     # F = F + ( D + D**3 + -10*D*v_z)*np.array([0.0,1.0])
-
-    #     # F = (-D**2 -10*D*v_x)*np.array([1.0,0.0])
-    #     # F = F + ( D + 5*D**3 + -10*D*v_z)*np.array([0.0,1.0])
-    #     # F = np.array([0,D+D**3]) + -5*D*np.array([0.0,1.0])*v_z # max(v_x,0)*(np.abs(np.array([v_x,v_z])*D)) +
-    #     # F = F + 5*max(v_x,0)*-D*np.array([1.0,0.0]) - 0.5*D*np.array([1.0,0.0])
-
-    #     return F
-
+   
     @staticmethod
     def Phi_soil(D, x, z, v_x, v_z, gamma):
         '''
         place hold soil force
         will be replaced by FEE
         '''
-        # F =     (-D**2 - D*gamma - 10*D*np.sign(v_x)*v_x**2)*np.array([1.0,0.0])
         F = (-D**2 -10*D*v_x)*np.array([1.0,0.0])
         F = F + ( D + D**3 + -10*D*v_z)*np.array([0.0,1.0])
         
-        # F =     (-D**2 - 10*D*v_x)*np.array([1.0,0.0])
-        # F = F + ( D + D**3 + -10*D*v_z)*np.array([0.0,1.0])
-
-        # F = (-D**2 -10*D*v_x)*np.array([1.0,0.0])
-        # F = F + ( D + 5*D**3 + -10*D*v_z)*np.array([0.0,1.0])
-        # F = np.array([0,D+D**3]) + -5*D*np.array([0.0,1.0])*v_z # max(v_x,0)*(np.abs(np.array([v_x,v_z])*D)) +
-        # F = F + 5*max(v_x,0)*-D*np.array([1.0,0.0]) - 0.5*D*np.array([1.0,0.0])
-
         return F
-
-
-    # @staticmethod
-    # def Phi_soil(d, x, z, v_x, v_z, q, u):
-    #     '''
-    #     place hold soil force
-    #     will be replaced by FEE
-    #     '''
-    #     # this is the 
-    #     q = 0.01*q
-
-    #     # this is the direction of motion
-    #     theta = np.arctan2(v_z, v_x)
-
-
-    #     beta  = np.pi/6
-    #     delta = np.pi/6
-    #     phi   = np.pi/4
-        
-    #     gamma = 3.
-    #     g = 1.0
-    #     w = 1.0
-
-    #     c = 1.0
-    #     C_a = 1.0
-
-    #     a    = w*d/(np.cos(beta + delta) + np.sin(beta + delta)*cot(rho + phi))
-    #     N_g  = 0.5*(cot(beta)+cot(rho))
-    #     N_q  = cot(beta) + cot(rho)
-    #     N_c  = 1 + cot(rho)*np.cos(rho + phi)
-    #     N_ca = 1 - cot(beta)*cot(rho + phi)
-    #     N_a  = (np.tan(rho) + cot(rho + phi))/(1 + np.tan(rho)*cot(beta))
-        
-    #     # print(a, N_g, N_q, N_c, N_ca, N_a)
-
-    #     T = a*(N_g*gamma*g*d + N_q*q + N_c*c + N_ca*C_a + N_a*gamma*v_x**2) 
-
-    #     # print(np.array([a*(N_g*gamma*g*d), a*(N_q*q), a*(N_c*c), a*(N_ca*C_a),a*(N_a*gamma*v_x**2)]))
-
-    #     F = T*np.array([-np.sin(beta + delta), np.cos(beta + delta)])
-
-    #     # F[0] = -d
-    #     # F[1] = 0.1*d - 0.01*v_z
-    #     # print(F)
-
-        # return F
-
-    # @staticmethod
-    # def Phi_soil(d, x, z, v_x, v_z, q, u):
-    #     '''
-    #     place hold soil force
-    #     will be replaced by FEE
-    #     '''
-    #     # This is the rake angle
-    #     rho = np.pi/3
-
-    #     theta_v = np.arctan2(v_z,v_x)
-    #     v_mag = np.sqrt(v_x**2 + v_z**2)
-
-    #     # added propeties:
-    #     K_stiff = 100
-    #     B_pen = 100
-
-    #     theta_v_min =  -rho
-    #     theta_v_compression = -(80./180.)*np.pi
-    #     theta_v_max = np.pi/6
-
-    #     # Soil angle
-    #     alpha = 0.0
-
-
-
-    #     # These are soil-tool properties
-    #     beta = np.pi/4  # failure angle
-    #     phi = np.pi/6 # soil internal friction angle
-    #     delta = np.pi/6 # soil tool friction angle
-    #     gamma = 1.0
-    #     g = 1.0
-    #     c = 1.0
-    #     c_a = 1.0
-    #     # calculate modified FEE coefficients
-    #     denom_common = np.sin(delta+rho+phi+beta)
-        
-    #     N_gamma = (cot(rho) + cot(beta))*np.sin(alpha+phi+beta)/(2*denom_common)
-    #     N_q = np.sin(alpha+phi+beta)/(denom_common)
-    #     N_c = np.cos(phi)/(np.sin(beta)*denom_common)
-    #     N_a = -np.cos(rho+phi+beta)
-    #     # N_i = (np.tan(beta) + cot(beta + phi))/(1 + np.tan(beta)*cot(rho))
-
-    #     F =  N_gamma*gamma*g*d**2 + N_c*c*d + N_q*g*q + N_a*c_a*d
-
-    #     F_x = -F*(np.cos(delta)*np.sin(rho-alpha) - np.sin(delta)*np.cos(rho-alpha))
-    #     F_z = -F*(np.cos(delta)*np.cos(rho-alpha) + np.sin(delta)*np.sin(rho-alpha))
-
-
-
-    #     #depending on direction of motion
-    #     if theta_v > theta_v_min and theta_v < theta_v_max: # within FEE range
-    #         print("in FEE region")
-    #         pass
-
-    #     elif theta_v > theta_v_max: # moving upwards 
-    #         print("moving upwards")
-    #         F_z = -q*g*gamma
-
-    #     elif theta_v < theta_v_min:
-    #         F_z = -B_pen*v_z + d
-
-    #     elif theta_v < theta_v_min: # compressing soil
-    #         print("moving downwards")
-    #         F_z = -B_pen*v_z - u[1] #cancel force and slow down
-
-    #     if F_z<
-
-    #     F_r = np.array([F_x,F_z])
-    #     print(F_r)
-
-    #     return F_r
-
 
     # nonlinear state equations
     def f(self,t,xi,u):
@@ -289,12 +128,6 @@ class Plant1(DFLDynamicPlant):
         F_soil = self.Phi_soil(D, x, z, v_x, v_z, gamma)
         # F_noise =  np.random.normal(np.array([0.0,0.0]),np.array([0.01,0.01]))
         F_net = F_scale*F_soil + u
-        
-        # if F_net[0]<=0:
-        #     F_net[0] = 0
-
-        # if v_z<=0:
-        #     F_net[1] = 0
         
         v_dot = np.linalg.inv(I).dot(F_net) 
 
@@ -539,7 +372,3 @@ if __name__== "__main__":
     plt.show()
 
     # #########################################
-
-
-    # #########################################
-
