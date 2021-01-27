@@ -1,12 +1,6 @@
 #!/usr/bin/env python
 import sys
 
-#import system id toolboxes
-sys.path.insert(0, "/home/filippos/repositories/pyN4SID")
-import ssid
-from sippy import *
-import control
-
 from abc import ABC, abstractmethod 
 import numpy as np 
 from numpy.linalg import lstsq

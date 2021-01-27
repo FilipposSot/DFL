@@ -8,10 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
 
-m = 1.0
-k11 = 0.2
-k13 = 2.0
-b1  = 3.0
+m, b, k = 1.0, 1.0, 1.0
 
 class Plant1(DFLDynamicPlant):
     
@@ -48,18 +45,11 @@ class Plant1(DFLDynamicPlant):
     # functions defining constituitive relations for this particular system
     @staticmethod
     def phi_c1(q):
-        e = k11*q + k13*q**3
-        return e
+        return k*q**3
 
     @staticmethod
-    def phi_r1(f):
-        # e = b1*np.sign(f)*np.abs(f)*np.abs(f)
-        e = b1*np.sign(f)*f**2
-        return e
-
-    @staticmethod
-    def phi_rc(q,v):
-        return 5*v*np.abs(q)
+    def phi_r1(v):
+        return b*v**3
     
     # nonlinear state equations
     def f(self,t,x,u):
@@ -68,7 +58,6 @@ class Plant1(DFLDynamicPlant):
         q,v = x[0],x[1]
         x_dot[0] = v
         x_dot[1] = -self.phi_r1(v) -self.phi_c1(q) + u 
-        # x_dot[1] = -self.phi_rc(q,v) + u 
 
         return x_dot
 
@@ -109,8 +98,6 @@ class Plant1(DFLDynamicPlant):
         eta[0] = self.phi_c1(q)
         eta[1] = self.phi_r1(v)
 
-        # eta[0] = self.phi_rc(q,v)
-        # eta[1] = 0.0 
         return eta
 
     def phi_hybrid(self,t,x,u):
@@ -137,80 +124,10 @@ def sin_u_func(y,t):
     # return np.sin(3*t) 
 
 if __name__== "__main__":
-    # plant1 = Plant1()
-
-    # dfl1 = DFL(plant1)
-    # setattr(plant1, "g", Plant1.gkoop1)
-
-    # # ########## KOOPMAN MPC TEST
-    # dfl1.generate_data_from_random_trajectories()
-    # # dfl1.generate_H_matrix()
-    # # dfl1.generate_N4SID_model()
-    # dfl1.generate_K_matrix()
-
-    # x_0 = np.array([1,0])
-    # T = 10.0
-
-    # # Objective function
-    # Q = sparse.diags([1., 0., 0., 0.])
-    # QN = Q
-    # R = 0.01*sparse.eye(1)
-
-    # # Initial and reference states
-    # u_minus = np.zeros((dfl1.plant.N_u,1))
-    # x0 = dfl1.plant.g(0.0, x_0, u_minus)
-    # xr = np.array([0.5 ,0., 0., 0.])
-
-    # x_min = np.array([-3.,-3.,-3.,-3.])
-    # x_max = np.array([3.,3.,3.,3.])
-
-    # # dummy reference trajectory
-    # t_traj = np.arange(0,T,0.05)
-    # x1_traj = np.sin(0.5*t_traj)
-    # x_traj = np.vstack((x1_traj,0*x1_traj,0*x1_traj,0*x1_traj)).T
-
-    # # mpc = MPC(dfl1.A_koop,
-    # #           dfl1.B_koop,
-    # #           x_min, x_max,
-    # #           plant1.u_min,
-    # #           plant1.u_max)
-
-    # mpc = MPC(dfl1.A_koop,
-    #           dfl1.B_koop,
-    #           x_min, x_max,
-    #           plant1.u_min,
-    #           plant1.u_max,
-    #           N = 20)
-    
-    # mpc.setup_new_problem(Q, QN, R, t_traj, x_traj, x0)
-
-    # x_0 = np.array([1,0])
-    # t, u, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0,  mpc.control_function, T)
-    # # t, u, x_koop1, y_koop = dfl1.simulate_system_koop(x_0, mpc.control_function, 10.0)
-    
-
-    # # mpc.control_function
-    # fig, axs = plt.subplots(3, 1)
-
-    # axs[0].plot(t, x_nonlin[:,0], 'b')
-    # axs[0].plot(t_traj, x_traj[:,0], 'b--')
-
-    # axs[1].plot(t, x_nonlin[:,1], 'r')
-    # axs[2].plot(t, u[:,0], 'g')
-
-    # axs[2].set_xlabel('time')
-    
-    # axs[0].set_ylabel('x')
-    # axs[1].set_ylabel('v')
-    # axs[2].set_ylabel('u')
-    # plt.show()
-
-    # exit()
-
-    ################# DFL MODEL TEST ##############################################
     plant1 = Plant1()
     dfl1 = DFL(plant1, dt_data = 0.05, dt_control = 0.2)
     setattr(plant1, "g", Plant1.gkoop2)
+    driving_fun = zero_u_func
 
     dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
     dfl1.generate_DFL_disc_model()
@@ -221,11 +138,11 @@ if __name__== "__main__":
     seed = np.random.randint(5)
 
     np.random.seed(seed = seed)
-    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, sin_u_func, 10.0)
+    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, 10.0)
     
     np.random.seed(seed = seed)
-    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, sin_u_func, 10.0,continuous = False)
-    t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, sin_u_func, 10.0)
+    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, 10.0,continuous = False)
+    t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, 10.0)
     
     fig, axs = plt.subplots(3, 1)
 
