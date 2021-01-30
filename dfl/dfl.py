@@ -1,5 +1,11 @@
 #!/usr/bin/env python
-import sys
+import torch
+import torch.optim as optim
+import torch.nn as nn
+from torchviz import make_dot
+from torch.utils.data import Dataset, TensorDataset, DataLoader
+from torch.utils.data.dataset import random_split
+from torch.autograd import Variable
 
 from abc import ABC, abstractmethod 
 import numpy as np 
@@ -18,13 +24,162 @@ import matplotlib.pyplot as plt
 np.set_printoptions(precision = 4)
 np.set_printoptions(suppress = True)
 
+H = 256
+dtype = torch.FloatTensor
+device = 'cpu'
+
+class Transpose(torch.nn.Module):
+    def __init__(self):
+        super(Transpose, self).__init__()
+
+    def forward(self, x):
+        return torch.transpose(x, 0,1)
+
+def do_dfl(x_t, x_tm1, eta_fn, u_tm1):
+    # Compute augmented state
+    eta_tm1 = eta_fn(x_tm1)
+    eta_t   = eta_fn(x_t  )
+
+    # Dummy input
+    u_t = torch.zeros(u_tm1.size())
+
+    # Assemble xi
+    xi_tm1 = torch.cat((x_tm1, eta_tm1, u_tm1), 0)
+    xi_t   = torch.cat((x_t  , eta_t  , u_t  ), 0)
+
+    # Linear regression to compute A and H
+    xi_pinv = torch.pinverse(xi_tm1)
+    A = torch.matmul(  x_t, xi_pinv)
+    H = torch.matmul(eta_t, xi_pinv)
+
+    return A, H, eta_t, xi_tm1
+
 class DFL():
     
     def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1):
         
         self.plant = dynamic_plant
         self.dt_data = dt_data 
-        self.dt_control = dt_control 
+        self.dt_control = dt_control
+
+    def train_model(self, model, x, y, title=None):
+        # Reshape x and y to be vector of tensors
+        x = torch.transpose(x,0,1)
+        y = torch.transpose(y,0,1)
+
+        dataset = TensorDataset(x, y)
+
+        N_train = int(3*len(y)/5)
+        train_dataset, val_dataset = random_split(dataset, [N_train,len(y)-N_train])
+
+        train_loader = DataLoader(dataset=train_dataset, batch_size=50)
+        val_loader   = DataLoader(dataset=val_dataset  , batch_size=50)
+
+        loss_fn = torch.nn.MSELoss(reduction='sum')
+
+        # Use the optim package to define an Optimizer that will update the weights of
+        # the model for us. Here we will use Adam; the optim package contains many other
+        # optimization algorithms. The first argument to the Adam constructor tells the
+        # optimizer which Tensors it should update.
+        learning_rate = .0001
+        n_epochs = 10
+        training_losses = []
+        validation_losses = []
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+        def step(x_batch, y_batch, model, loss_fn):
+            # Send data to GPU if applicable
+            x_batch = x_batch.to(device)
+            y_batch = y_batch.to(device)
+
+            # Reshape data for linear algebra
+            x_batch = torch.transpose(x_batch, 0,1)
+            y_batch = torch.transpose(y_batch, 0,1)
+
+            # Label input data
+            x_tm1 = x_batch[:2,:]
+            u_tm1 = x_batch[2,:][None,:]
+            x_t   = y_batch
+
+            A, H, eta_t, xi_tm1 = do_dfl(x_t, x_tm1, model, u_tm1)
+
+            # Estimate x and eta using DFL model
+            x_hat   = torch.matmul(A,xi_tm1)
+            eta_hat = torch.matmul(H,xi_tm1)
+
+            # Return 
+            return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
+
+        for t in range(n_epochs):
+            batch_losses = []
+
+            with torch.no_grad():
+                val_losses = []
+                for x_val, y_val in val_loader:
+                    val_loss = step(x_val, y_val, model, loss_fn).item()
+                    val_losses.append(val_loss)
+                validation_loss = np.mean(val_losses)
+                validation_losses.append(validation_loss)
+
+            # if t>100 and validation_losses[-2]<=validation_losses[-1]:
+            #   break
+
+            for x_batch, y_batch in train_loader:
+                loss = step(x_batch, y_batch, model, loss_fn)
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                batch_losses.append(loss.item())
+            training_loss = np.mean(batch_losses)
+            training_losses.append(training_loss)
+
+            print(f"[{t+1}] Training loss: {training_loss:.3f}\t Validation loss: {validation_loss:.3f}")
+        
+        plt.figure()
+        plt.semilogy(range(len(training_losses)), training_losses, label='Training Loss')
+        plt.semilogy(range(len(validation_losses)), validation_losses, label='Validation Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        if title is not None:
+            plt.title(title)
+        plt.show()
+
+        model.eval()
+        return model
+
+    def learn_eta_fn(self):
+        x_minus = torch.transpose(torch.from_numpy(self.X_minus.reshape(-1, self.X_minus.shape[-1])).type(dtype), 0,1)
+        u_minus = torch.transpose(torch.from_numpy(self.U_minus.reshape(-1, self.U_minus.shape[-1])).type(dtype), 0,1)
+        x_plus  = torch.transpose(torch.from_numpy(self.X_plus .reshape(-1, self.X_plus .shape[-1])).type(dtype), 0,1)
+
+        model = torch.nn.Sequential(
+            Transpose(),
+            torch.nn.Linear(self.plant.n_x, H),
+            torch.nn.ReLU(),
+            torch.nn.ReLU(),
+            torch.nn.ReLU(),
+            torch.nn.ReLU(),
+            torch.nn.Linear(H, self.plant.n_eta),
+            Transpose()
+        )
+
+        model = self.train_model(model, torch.cat((x_minus, u_minus), 0), x_plus)
+
+        def eta_fn(x, u):
+            #transform dimensions
+            #concatenate
+            #numpy to pytorch
+            #feed through model
+            #pytorch to numpy
+            #return dimensions
+
+        return eta_fn
+
+    def regen_eta(self, eta_fn):
+        breakpoint()
 
     def regress_H_cont_matrix(self):
         '''
@@ -48,9 +203,9 @@ class DFL():
         '''
         regress the H matrix for DFL model
         '''
-        omega = np.concatenate((self.X_minus.reshape(-1, self.X_minus.shape[-1]),
-                                self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]),
-                                self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
+        Xi_minus = np.concatenate((self.  X_minus.reshape(-1, self.  X_minus.shape[-1]),
+                                   self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]),
+                                   self.  U_minus.reshape(-1, self.  U_minus.shape[-1])),axis=1).T
         
         Y = self.Eta_plus.reshape(-1, self.Eta_plus.shape[-1]).T
 
@@ -97,17 +252,17 @@ class DFL():
         self.A_disc_dfl = A_disc
         self.B_disc_dfl = B_disc
 
-    def regress_K_matrix(self):
+    # def regress_K_matrix(self):
 
-        omega = np.concatenate((self.Y_minus.reshape(-1, self.Y_minus.shape[-1]),
-                                self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
+    #     omega = np.concatenate((self.Y_minus.reshape(-1, self.Y_minus.shape[-1]),
+    #                             self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
         
-        Y = self.Y_plus.reshape(-1, self.Y_plus.shape[-1]).T
+    #     Y = self.Y_plus.reshape(-1, self.Y_plus.shape[-1]).T
 
-        G = lstsq(omega.T,Y.T,rcond=None)[0].T
+    #     G = lstsq(omega.T,Y.T,rcond=None)[0].T
         
-        self.A_disc_koop = G[: , :self.Y_plus.shape[-1]] 
-        self.B_disc_koop = G[: , self.Y_plus.shape[-1]:]
+    #     self.A_disc_koop = G[: , :self.Y_plus.shape[-1]] 
+    #     self.B_disc_koop = G[: , self.Y_plus.shape[-1]:]
 
     def generate_sid_model(self,xi_order):
 
@@ -123,51 +278,51 @@ class DFL():
 
         self.A_disc_sid,self.B_disc_sid,self.C_disc_sid,self.D_disc_sid = sys_id.A, sys_id.B, sys_id.C, sys_id.D
 
-    def generate_hybrid_model(self,xi_order):
+    # def generate_hybrid_model(self,xi_order):
 
-        U = np.concatenate((self.X_minus.reshape(-1, self.X_minus.shape[-1]),
-                            self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
+    #     U = np.concatenate((self.X_minus.reshape(-1, self.X_minus.shape[-1]),
+    #                         self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
 
-        Y_temp = self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]).T
+    #     Y_temp = self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]).T
 
-        Y = self.plant.P.dot(Y_temp)
+    #     Y = self.plant.P.dot(Y_temp)
         
-        if len(Y.shape) == 1:
-            Y = Y.T
-            Y = np.expand_dims(Y, axis=0)
+    #     if len(Y.shape) == 1:
+    #         Y = Y.T
+    #         Y = np.expand_dims(Y, axis=0)
 
-        (A_disc_x, B_disc_x,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
-                                                np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
-                                                self.dt_data)
+    #     (A_disc_x, B_disc_x,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
+    #                                             np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
+    #                                             self.dt_data)
             
-        (_,A_disc_eta_hybrid,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta_hybrid, 
-                                          np.zeros(self.plant.n_x), np.zeros(self.plant.n_eta)),
-                                                self.dt_data)
+    #     (_,A_disc_eta_hybrid,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta_hybrid, 
+    #                                       np.zeros(self.plant.n_x), np.zeros(self.plant.n_eta)),
+    #                                             self.dt_data)
 
-        method = 'N4SID'
-        sys_id = system_identification(Y, U, method, SS_D_required = True, SS_fixed_order = int(xi_order)) #, IC='AICc')#
+    #     method = 'N4SID'
+    #     sys_id = system_identification(Y, U, method, SS_D_required = True, SS_fixed_order = int(xi_order)) #, IC='AICc')#
 
-        # SS_fixed_order = self.plant.N_eta,
-        A_til,B_til,C_til,D_til = sys_id.A, sys_id.B, sys_id.C, sys_id.D
+    #     # SS_fixed_order = self.plant.N_eta,
+    #     A_til,B_til,C_til,D_til = sys_id.A, sys_id.B, sys_id.C, sys_id.D
         
-        B_til_1 = B_til[:,:self.plant.n_x]
-        B_til_2 = B_til[:,self.plant.n_x:]
-        D_til_1 = D_til[:,:self.plant.n_x]
-        D_til_2 = D_til[:,self.plant.n_x:]
+    #     B_til_1 = B_til[:,:self.plant.n_x]
+    #     B_til_2 = B_til[:,self.plant.n_x:]
+    #     D_til_1 = D_til[:,:self.plant.n_x]
+    #     D_til_2 = D_til[:,self.plant.n_x:]
 
-        A1 = A_disc_x + A_disc_eta_hybrid.dot(D_til_1)
-        A2 = A_disc_eta_hybrid.dot(C_til)
-        B1 = B_disc_x+ A_disc_eta_hybrid.dot(D_til_2)
+    #     A1 = A_disc_x + A_disc_eta_hybrid.dot(D_til_1)
+    #     A2 = A_disc_eta_hybrid.dot(C_til)
+    #     B1 = B_disc_x+ A_disc_eta_hybrid.dot(D_til_2)
 
-        self.A_disc_hybrid_full =  np.block([[A1     ,  A2],
-                                             [B_til_1,  A_til ]])
+    #     self.A_disc_hybrid_full =  np.block([[A1     ,  A2],
+    #                                          [B_til_1,  A_til ]])
 
-        self.B_disc_hybrid_full = np.block([[B1],
-                                       [B_til_2]])
+    #     self.B_disc_hybrid_full = np.block([[B1],
+    #                                    [B_til_2]])
 
-        self.C_til = C_til
-        self.D_til_1 = D_til_1
-        self.D_til_2 = D_til_2
+    #     self.C_til = C_til
+    #     self.D_til_1 = D_til_1
+    #     self.D_til_2 = D_til_2
 
     def f_cont_dfl(self,t,xi,u):
 
@@ -191,23 +346,23 @@ class DFL():
 
         return y_plus
 
-    def f_disc_koop(self,t,x,u):
+    # def f_disc_koop(self,t,x,u):
 
-        if not isinstance(u,np.ndarray):
-            u = np.array([u])
+    #     if not isinstance(u,np.ndarray):
+    #         u = np.array([u])
 
-        y_plus = np.dot(self.A_disc_koop,x) + np.dot(self.B_disc_koop, u)
+    #     y_plus = np.dot(self.A_disc_koop,x) + np.dot(self.B_disc_koop, u)
 
-        return y_plus
+    #     return y_plus
 
-    def f_disc_hybrid(self,t,x,u):
+    # def f_disc_hybrid(self,t,x,u):
 
-        if not isinstance(u,np.ndarray):
-            u = np.array([u])
+    #     if not isinstance(u,np.ndarray):
+    #         u = np.array([u])
 
-        x_plus = np.dot(self.A_disc_hybrid_full,x) + np.dot(self.B_disc_hybrid_full, u)
+    #     x_plus = np.dot(self.A_disc_hybrid_full,x) + np.dot(self.B_disc_hybrid_full, u)
 
-        return x_plus
+    #     return x_plus
     
     def f_disc_sid(self,t,x,u):
 
@@ -218,17 +373,17 @@ class DFL():
 
         return x_plus
     
-    def g_disc_hybrid(self,t,x,u):
+    # def g_disc_hybrid(self,t,x,u):
 
-        if not isinstance(u,np.ndarray):
-            u = np.array([u])
+    #     if not isinstance(u,np.ndarray):
+    #         u = np.array([u])
 
-        if len(u.shape) > 1:
-            u = u.flatten()
+    #     if len(u.shape) > 1:
+    #         u = u.flatten()
 
-        y = np.dot(self.C_disc_sid, x) + np.dot(self.D_disc_sid, u)
+    #     y = np.dot(self.C_disc_sid, x) + np.dot(self.D_disc_sid, u)
         
-        return y
+    #     return y
     
     def g_disc_sid(self,t,x,u):
 
@@ -242,19 +397,19 @@ class DFL():
         
         return y
     
-    def g_disc_hybrid(self,t,x,u):
+    # def g_disc_hybrid(self,t,x,u):
 
-        if not isinstance(u,np.ndarray):
-            u = np.array([u])
+    #     if not isinstance(u,np.ndarray):
+    #         u = np.array([u])
 
-        if len(u.shape) > 1:
-            u = u.flatten()
+    #     if len(u.shape) > 1:
+    #         u = u.flatten()
 
-        eta = np.dot(self.C_til, x[self.plant.N_x:]) + np.dot(self.D_til_1, x[:self.plant.N_x]) + np.dot(self.D_til_2, u)
+    #     eta = np.dot(self.C_til, x[self.plant.N_x:]) + np.dot(self.D_til_1, x[:self.plant.N_x]) + np.dot(self.D_til_2, u)
 
-        y = np.concatenate((x[:self.plant.N_x],eta))
+    #     y = np.concatenate((x[:self.plant.N_x],eta))
 
-        return y
+    #     return y
 
     @staticmethod
     def simulate_system(x_0, u_minus, t_f, dt, u_func, dt_control, f_func, g_func, continuous = True):
@@ -411,7 +566,6 @@ class DFL():
             U_plus_data.append(u_array[1:])
             X_plus_data.append(x_array[1:])
             Eta_plus_data.append(eta_array[1:])
-
 
             t_data.append(t_array)
             x_data.append(x_array)
