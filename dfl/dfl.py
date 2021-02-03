@@ -27,6 +27,12 @@ np.set_printoptions(suppress = True)
 H = 256
 dtype = torch.FloatTensor
 device = 'cpu'
+seed = 9
+torch.manual_seed(seed)
+np.random.seed(seed = seed)
+
+RETRAIN = True
+RETRAIN = False
 
 class Transpose(torch.nn.Module):
     def __init__(self):
@@ -35,24 +41,69 @@ class Transpose(torch.nn.Module):
     def forward(self, x):
         return torch.transpose(x, 0,1)
 
-def do_dfl(x_t, x_tm1, eta_fn, u_tm1):
-    # Compute augmented state
-    eta_tm1 = eta_fn(x_tm1)
-    eta_t   = eta_fn(x_t  )
+# def do_dfl(x_t, x_tm1, eta_fn, u_tm1):
+#     # Compute augmented state
+#     eta_tm1 = eta_fn(x_tm1)
+#     eta_t   = eta_fn(x_t  )
 
-    # Dummy input
-    u_t = torch.zeros(u_tm1.size())
+#     # Dummy input
+#     u_t = torch.zeros(u_tm1.size())
 
-    # Assemble xi
-    xi_tm1 = torch.cat((x_tm1, eta_tm1, u_tm1), 0)
-    xi_t   = torch.cat((x_t  , eta_t  , u_t  ), 0)
+#     # Assemble xi
+#     xi_tm1 = torch.cat((x_tm1, eta_tm1, u_tm1), 0)
+#     xi_t   = torch.cat((x_t  , eta_t  , u_t  ), 0)
 
-    # Linear regression to compute A and H
-    xi_pinv = torch.pinverse(xi_tm1)
-    A = torch.matmul(  x_t, xi_pinv)
-    H = torch.matmul(eta_t, xi_pinv)
+#     # Linear regression to compute A and H
+#     xi_pinv = torch.pinverse(xi_tm1)
+#     A = torch.matmul(  x_t, xi_pinv)
+#     H = torch.matmul(eta_t, xi_pinv)
 
-    return A, H, eta_t, xi_tm1
+#     return A, H, eta_t, xi_tm1
+
+class LearnedDFL(torch.nn.Module):
+    def __init__(self, D_x, D_eta, D_u, H):
+        super(LearnedDFL, self).__init__()
+
+        self.D_x = D_x
+        D_xi = D_x + D_eta + D_u
+
+        self.g = torch.nn.Sequential(
+            torch.nn.Linear(D_x,H),
+            torch.nn.ReLU(),
+            torch.nn.ReLU(),
+            torch.nn.ReLU(),
+            torch.nn.Linear(H,D_eta)
+        )
+
+        self.A = torch.nn.Linear(D_xi,D_x)
+        self.H = torch.nn.Linear(D_xi,D_eta)
+
+    def forward(self, x_star):
+        x_tm1 = x_star[:,:self.D_x]
+        u_tm1 = x_star[:,self.D_x:]
+
+        eta_tm1 = self.g(x_tm1)
+
+        xi_tm1 = torch.cat((x_tm1,eta_tm1,u_tm1), 1)
+
+        x_t = self.A(xi_tm1)
+        eta_t = self.H(xi_tm1)
+
+        return x_t, eta_t
+
+def step(x_batch, y_batch, model, loss_fn):
+    # Send data to GPU if applicable
+    x_batch = x_batch.to(device)
+    y_batch = y_batch.to(device)
+
+    x_t = y_batch
+
+    eta_t = model.g(x_t)
+
+    x_hat, eta_hat = model(x_batch)
+
+    # Return 
+    return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
 
 class DFL():
     
@@ -82,33 +133,10 @@ class DFL():
         # optimization algorithms. The first argument to the Adam constructor tells the
         # optimizer which Tensors it should update.
         learning_rate = .0001
-        n_epochs = 10
+        n_epochs = 10000
         training_losses = []
         validation_losses = []
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
-        def step(x_batch, y_batch, model, loss_fn):
-            # Send data to GPU if applicable
-            x_batch = x_batch.to(device)
-            y_batch = y_batch.to(device)
-
-            # Reshape data for linear algebra
-            x_batch = torch.transpose(x_batch, 0,1)
-            y_batch = torch.transpose(y_batch, 0,1)
-
-            # Label input data
-            x_tm1 = x_batch[:2,:]
-            u_tm1 = x_batch[2,:][None,:]
-            x_t   = y_batch
-
-            A, H, eta_t, xi_tm1 = do_dfl(x_t, x_tm1, model, u_tm1)
-
-            # Estimate x and eta using DFL model
-            x_hat   = torch.matmul(A,xi_tm1)
-            eta_hat = torch.matmul(H,xi_tm1)
-
-            # Return 
-            return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
 
         for t in range(n_epochs):
             batch_losses = []
@@ -155,31 +183,43 @@ class DFL():
         u_minus = torch.transpose(torch.from_numpy(self.U_minus.reshape(-1, self.U_minus.shape[-1])).type(dtype), 0,1)
         x_plus  = torch.transpose(torch.from_numpy(self.X_plus .reshape(-1, self.X_plus .shape[-1])).type(dtype), 0,1)
 
-        model = torch.nn.Sequential(
-            Transpose(),
-            torch.nn.Linear(self.plant.n_x, H),
-            torch.nn.ReLU(),
-            torch.nn.ReLU(),
-            torch.nn.ReLU(),
-            torch.nn.ReLU(),
-            torch.nn.Linear(H, self.plant.n_eta),
-            Transpose()
-        )
+        # model = torch.nn.Sequential(
+        #     Transpose(),
+        #     torch.nn.Linear(self.plant.n_x, H),
+        #     torch.nn.ReLU(),
+        #     torch.nn.ReLU(),
+        #     torch.nn.ReLU(),
+        #     torch.nn.ReLU(),
+        #     torch.nn.Linear(H, self.plant.n_eta),
+        #     Transpose()
+        # )
 
-        model = self.train_model(model, torch.cat((x_minus, u_minus), 0), x_plus)
+        self.model = LearnedDFL(self.plant.n_x, self.plant.n_eta, self.plant.n_u, 256)
+
+        if RETRAIN:
+            self.model = self.train_model(self.model, torch.cat((x_minus, u_minus), 0), x_plus)
+            torch.save(self.model.state_dict(), 'model.pt')
+        else:
+            self.model.load_state_dict(torch.load('model.pt'))
 
         def eta_fn(x, u):
-            #transform dimensions
-            #concatenate
-            #numpy to pytorch
-            #feed through model
-            #pytorch to numpy
-            #return dimensions
+            x_shape = x.shape
+            u_shape = u.shape
+            if len(x_shape)==3:
+                x = x.reshape(-1, x.shape[-1])
+                u = u.reshape(-1, u.shape[-1])
 
-        return eta_fn
+            inp = torch.from_numpy(x).type(dtype)
 
-    def regen_eta(self, eta_fn):
-        breakpoint()
+            eta = self.model.g(inp).detach().numpy().T.reshape(x_shape)
+
+            return eta
+
+        self.eta_fn = eta_fn
+
+    def regen_eta(self):
+        self.Eta_minus = self.eta_fn(self.X_minus, self.U_minus)
+        self.Eta_plus  = self.eta_fn(self.X_plus , self.U_plus )
 
     def regress_H_cont_matrix(self):
         '''
@@ -203,7 +243,7 @@ class DFL():
         '''
         regress the H matrix for DFL model
         '''
-        Xi_minus = np.concatenate((self.  X_minus.reshape(-1, self.  X_minus.shape[-1]),
+        omega = np.concatenate((self.  X_minus.reshape(-1, self.  X_minus.shape[-1]),
                                    self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]),
                                    self.  U_minus.reshape(-1, self.  U_minus.shape[-1])),axis=1).T
         
@@ -252,17 +292,17 @@ class DFL():
         self.A_disc_dfl = A_disc
         self.B_disc_dfl = B_disc
 
-    # def regress_K_matrix(self):
+    def regress_K_matrix(self):
 
-    #     omega = np.concatenate((self.Y_minus.reshape(-1, self.Y_minus.shape[-1]),
-    #                             self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
+        omega = np.concatenate((self.Y_minus.reshape(-1, self.Y_minus.shape[-1]),
+                                self.U_minus.reshape(-1, self.U_minus.shape[-1])),axis=1).T
         
-    #     Y = self.Y_plus.reshape(-1, self.Y_plus.shape[-1]).T
+        Y = self.Y_plus.reshape(-1, self.Y_plus.shape[-1]).T
 
-    #     G = lstsq(omega.T,Y.T,rcond=None)[0].T
+        G = lstsq(omega.T,Y.T,rcond=None)[0].T
         
-    #     self.A_disc_koop = G[: , :self.Y_plus.shape[-1]] 
-    #     self.B_disc_koop = G[: , self.Y_plus.shape[-1]:]
+        self.A_disc_koop = G[: , :self.Y_plus.shape[-1]] 
+        self.B_disc_koop = G[: , self.Y_plus.shape[-1]:]
 
     def generate_sid_model(self,xi_order):
 
@@ -346,23 +386,44 @@ class DFL():
 
         return y_plus
 
-    # def f_disc_koop(self,t,x,u):
+    def f_disc_learned(self,t,x,u):
+        if not isinstance(u, np.ndarray):
+            u = np.array([u])
 
-    #     if not isinstance(u,np.ndarray):
-    #         u = np.array([u])
+        # NumPy to PyTorch
+        x = torch.from_numpy(x).type(dtype)
+        u = torch.from_numpy(u).type(dtype)
 
-    #     y_plus = np.dot(self.A_disc_koop,x) + np.dot(self.B_disc_koop, u)
+        # Assemble into xi
+        xi_t = torch.cat((x,u),0)
 
-    #     return y_plus
+        # Propagate through model
+        x_tp1 = self.model.A(xi_t)
+        eta_tp1 = self.model.H(xi_t)
 
-    # def f_disc_hybrid(self,t,x,u):
+        # PyTorch to NumPy
+        x_tp1   =   x_tp1.detach().numpy()
+        eta_tp1 = eta_tp1.detach().numpy()
 
-    #     if not isinstance(u,np.ndarray):
-    #         u = np.array([u])
+        return np.concatenate((x_tp1,eta_tp1))
 
-    #     x_plus = np.dot(self.A_disc_hybrid_full,x) + np.dot(self.B_disc_hybrid_full, u)
+    def f_disc_koop(self,t,x,u):
 
-    #     return x_plus
+        if not isinstance(u,np.ndarray):
+            u = np.array([u])
+
+        y_plus = np.dot(self.A_disc_koop,x) + np.dot(self.B_disc_koop, u)
+
+        return y_plus
+
+    def f_disc_hybrid(self,t,x,u):
+
+        if not isinstance(u,np.ndarray):
+            u = np.array([u])
+
+        x_plus = np.dot(self.A_disc_hybrid_full,x) + np.dot(self.B_disc_hybrid_full, u)
+
+        return x_plus
     
     def f_disc_sid(self,t,x,u):
 
@@ -613,7 +674,16 @@ class DFL():
                                             u_func, self.dt_control, self.f_disc_dfl, self.plant.g,
                                             continuous = False)
             
-        return t, u, xi, y 
+        return t, u, xi, y
+
+    def simulate_system_learned(self, x_0, u_func, t_f):
+        u_minus = np.zeros((self.plant.n_u,1))
+        eta_0 = self.eta_fn(x_0, u_minus)
+        xi_0 = np.concatenate((x_0, eta_0))
+
+        t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data, u_func, self.dt_control, self.f_disc_learned, self.plant.g, continuous=False)
+
+        return t, u, xi, y
 
     def simulate_system_koop(self, x_0, u_func, t_f):
 

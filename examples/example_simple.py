@@ -211,6 +211,7 @@ if __name__== "__main__":
     plant1 = Plant1()
     dfl1 = DFL(plant1, dt_data = 0.05, dt_control = 0.2)
     setattr(plant1, "g", Plant1.gkoop2)
+    driving_fun = sin_u_func
 
     dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
     dfl1.generate_DFL_disc_model()
@@ -221,11 +222,11 @@ if __name__== "__main__":
     seed = np.random.randint(5)
 
     np.random.seed(seed = seed)
-    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, sin_u_func, 10.0)
+    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, 10.0)
     
     np.random.seed(seed = seed)
-    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, sin_u_func, 10.0,continuous = False)
-    t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, sin_u_func, 10.0)
+    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, 10.0,continuous = False)
+    t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, 10.0)
     
     fig, axs = plt.subplots(3, 1)
 

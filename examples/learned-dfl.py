@@ -107,8 +107,6 @@ class Plant1(DFLDynamicPlant):
         eta[0] = self.phi_c1(q)
         eta[1] = self.phi_r1(v)
 
-        # eta[0] = self.phi_rc(q,v)
-        # eta[1] = 0.0 
         return eta
 
 ###########################################################################################
@@ -129,31 +127,33 @@ if __name__== "__main__":
     plant1 = Plant1()
     dfl1 = DFL(plant1, dt_data = 0.05, dt_control = 0.2)
     # setattr(plant1, "g", Plant1.gkoop2)
+    driving_fun = sin_u_func
 
     dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
-    eta_fn = dfl1.learn_eta_fn()
-    dfl1.regen_eta(eta_fn)
+    dfl1.learn_eta_fn()
+    dfl1.regen_eta()
     dfl1.generate_DFL_disc_model()
     # dfl1.regress_K_matrix()
 
     # x_0 = np.random.uniform(plant1.x_init_min,plant1.x_init_max)
     x_0 = np.array([0,0])
-    seed = np.random.randint(5)
 
-    np.random.seed(seed = seed)
-    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, sin_u_func, 10.0)
+    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, 10.0)
     
-    np.random.seed(seed = seed)
-    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, sin_u_func, 10.0,continuous = False)
-    # t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, sin_u_func, 10.0)
+    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, 10.0, continuous = False)
+    # t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, 10.0)
+
+    t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0, driving_fun, 10.0)
     
     fig, axs = plt.subplots(3, 1)
 
     axs[0].plot(t, y_nonlin[:,0], 'k')
-    axs[0].plot(t, y_dfl[:,0] ,'k-.')
+    # axs[0].plot(t, y_dfl[:,0] ,'k-.')
+    axs[0].plot(t, y_lrn[:,0] ,'k-.')
 
     axs[1].plot(t, y_nonlin[:,1],'k')
-    axs[1].plot(t, y_dfl[:,1],'k-.')
+    # axs[1].plot(t, y_dfl[:,1],'k-.')
+    axs[1].plot(t, y_lrn[:,1],'k-.')
   
     axs[2].plot(t, u_nonlin,'k')
     axs[2].plot(t, u_dfl,'k-.')
