@@ -128,35 +128,42 @@ if __name__== "__main__":
     dfl1 = DFL(plant1, dt_data = 0.05, dt_control = 0.2)
     # setattr(plant1, "g", Plant1.gkoop2)
     driving_fun = sin_u_func
+    T = 11.0
 
     dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
     dfl1.learn_eta_fn()
-    dfl1.regen_eta()
+    # dfl1.regen_eta()
     dfl1.generate_DFL_disc_model()
     # dfl1.regress_K_matrix()
+    # dfl1.lstsqAH()
 
     # x_0 = np.random.uniform(plant1.x_init_min,plant1.x_init_max)
     x_0 = np.array([0,0])
 
-    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, 10.0)
+    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, T)
     
-    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, 10.0, continuous = False)
-    # t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, 10.0)
+    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, T, continuous = False)
+    # t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, T)
 
-    t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0, driving_fun, 10.0)
+    t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0, driving_fun, T)
+
+    sse_dfl = np.sum(np.abs(y_nonlin[:,0]-y_dfl[:,0]))
+    sse_lrn = np.sum(np.abs(y_nonlin[:,0]-y_lrn[:,0]))
+    print(sse_dfl)
+    print(sse_lrn)
     
     fig, axs = plt.subplots(3, 1)
 
-    axs[0].plot(t, y_nonlin[:,0], 'k')
-    # axs[0].plot(t, y_dfl[:,0] ,'k-.')
-    axs[0].plot(t, y_lrn[:,0] ,'k-.')
+    axs[0].plot(t, y_nonlin[:,0], 'k', label='True')
+    axs[0].plot(t, y_dfl[:,0] ,'r-.', label='DFL')
+    axs[0].plot(t, y_lrn[:,0] ,'b-.', label='LDFL')
+    axs[0].legend()
 
     axs[1].plot(t, y_nonlin[:,1],'k')
-    # axs[1].plot(t, y_dfl[:,1],'k-.')
-    axs[1].plot(t, y_lrn[:,1],'k-.')
+    axs[1].plot(t, y_dfl[:,1],'r-.')
+    axs[1].plot(t, y_lrn[:,1],'b-.')
   
     axs[2].plot(t, u_nonlin,'k')
-    axs[2].plot(t, u_dfl,'k-.')
 
     axs[2].set_xlabel('time')
     

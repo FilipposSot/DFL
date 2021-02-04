@@ -34,32 +34,6 @@ np.random.seed(seed = seed)
 RETRAIN = True
 RETRAIN = False
 
-class Transpose(torch.nn.Module):
-    def __init__(self):
-        super(Transpose, self).__init__()
-
-    def forward(self, x):
-        return torch.transpose(x, 0,1)
-
-# def do_dfl(x_t, x_tm1, eta_fn, u_tm1):
-#     # Compute augmented state
-#     eta_tm1 = eta_fn(x_tm1)
-#     eta_t   = eta_fn(x_t  )
-
-#     # Dummy input
-#     u_t = torch.zeros(u_tm1.size())
-
-#     # Assemble xi
-#     xi_tm1 = torch.cat((x_tm1, eta_tm1, u_tm1), 0)
-#     xi_t   = torch.cat((x_t  , eta_t  , u_t  ), 0)
-
-#     # Linear regression to compute A and H
-#     xi_pinv = torch.pinverse(xi_tm1)
-#     A = torch.matmul(  x_t, xi_pinv)
-#     H = torch.matmul(eta_t, xi_pinv)
-
-#     return A, H, eta_t, xi_tm1
-
 class LearnedDFL(torch.nn.Module):
     def __init__(self, D_x, D_eta, D_u, H):
         super(LearnedDFL, self).__init__()
@@ -91,6 +65,22 @@ class LearnedDFL(torch.nn.Module):
 
         return x_t, eta_t
 
+    def lstsqAH(self, x_t, x_tm1, u_tm1):
+        eta_tm1 = self.g(x_tm1)
+
+        xi_tm1 = torch.cat((x_tm1,eta_tm1,u_tm1), 1)
+
+        eta_t = self.g(x_t)
+
+        A = torch.lstsq(  x_t,xi_tm1).solution[:5]
+        H = torch.lstsq(eta_t,xi_tm1).solution[:5]
+
+        for i in range(len(A)):
+            for j in range(len(A[0])):
+                self.A.weight[j,i] = A[i,j].item()
+            for j in range(len(H[0])):
+                self.H.weight[j,i] = H[i,j].item()
+
 def step(x_batch, y_batch, model, loss_fn):
     # Send data to GPU if applicable
     x_batch = x_batch.to(device)
@@ -106,7 +96,6 @@ def step(x_batch, y_batch, model, loss_fn):
     return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
 
 class DFL():
-    
     def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1):
         
         self.plant = dynamic_plant
@@ -183,17 +172,6 @@ class DFL():
         u_minus = torch.transpose(torch.from_numpy(self.U_minus.reshape(-1, self.U_minus.shape[-1])).type(dtype), 0,1)
         x_plus  = torch.transpose(torch.from_numpy(self.X_plus .reshape(-1, self.X_plus .shape[-1])).type(dtype), 0,1)
 
-        # model = torch.nn.Sequential(
-        #     Transpose(),
-        #     torch.nn.Linear(self.plant.n_x, H),
-        #     torch.nn.ReLU(),
-        #     torch.nn.ReLU(),
-        #     torch.nn.ReLU(),
-        #     torch.nn.ReLU(),
-        #     torch.nn.Linear(H, self.plant.n_eta),
-        #     Transpose()
-        # )
-
         self.model = LearnedDFL(self.plant.n_x, self.plant.n_eta, self.plant.n_u, 256)
 
         if RETRAIN:
@@ -218,8 +196,15 @@ class DFL():
         self.eta_fn = eta_fn
 
     def regen_eta(self):
-        self.Eta_minus = self.eta_fn(self.X_minus, self.U_minus)
-        self.Eta_plus  = self.eta_fn(self.X_plus , self.U_plus )
+        self.EtaL_minus = self.eta_fn(self.X_minus, self.U_minus)
+        self.EtaL_plus  = self.eta_fn(self.X_plus , self.U_plus )
+
+    def lstsqAH(self):
+        x_t   = torch.from_numpy(self.X_plus .reshape(-1, self.X_plus .shape[-1])).type(dtype)
+        x_tm1 = torch.from_numpy(self.X_minus.reshape(-1, self.X_minus.shape[-1])).type(dtype)
+        u_tm1 = torch.from_numpy(self.U_minus.reshape(-1, self.U_minus.shape[-1])).type(dtype)
+
+        self.model.lstsqAH(x_t, x_tm1, u_tm1)
 
     def regress_H_cont_matrix(self):
         '''
@@ -244,8 +229,8 @@ class DFL():
         regress the H matrix for DFL model
         '''
         omega = np.concatenate((self.  X_minus.reshape(-1, self.  X_minus.shape[-1]),
-                                   self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]),
-                                   self.  U_minus.reshape(-1, self.  U_minus.shape[-1])),axis=1).T
+                                self.Eta_minus.reshape(-1, self.Eta_minus.shape[-1]),
+                                self.  U_minus.reshape(-1, self.  U_minus.shape[-1])),axis=1).T
         
         Y = self.Eta_plus.reshape(-1, self.Eta_plus.shape[-1]).T
 
