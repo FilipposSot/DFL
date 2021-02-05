@@ -32,7 +32,7 @@ torch.manual_seed(seed)
 np.random.seed(seed = seed)
 
 RETRAIN = True
-RETRAIN = False
+# RETRAIN = False
 
 class LearnedDFL(torch.nn.Module):
     def __init__(self, D_x, D_eta, D_u, H):
@@ -122,7 +122,7 @@ class DFL():
         # optimization algorithms. The first argument to the Adam constructor tells the
         # optimizer which Tensors it should update.
         learning_rate = .0001
-        n_epochs = 10000
+        n_epochs = 100000
         training_losses = []
         validation_losses = []
         optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -138,8 +138,8 @@ class DFL():
                 validation_loss = np.mean(val_losses)
                 validation_losses.append(validation_loss)
 
-            # if t>100 and validation_losses[-2]<=validation_losses[-1]:
-            #   break
+            if t>100 and np.mean(validation_losses[-20:-11])<=np.mean(validation_losses[-10:-1]):
+                break
 
             for x_batch, y_batch in train_loader:
                 loss = step(x_batch, y_batch, model, loss_fn)
@@ -153,6 +153,7 @@ class DFL():
             training_losses.append(training_loss)
 
             print(f"[{t+1}] Training loss: {training_loss:.3f}\t Validation loss: {validation_loss:.3f}")
+
         
         plt.figure()
         plt.semilogy(range(len(training_losses)), training_losses, label='Training Loss')

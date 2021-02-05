@@ -141,6 +141,7 @@ if __name__== "__main__":
     
     t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, T, continuous = False)
     t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, T)
+
     t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0, driving_fun, T)
 
     sse_dfl = np.sum(np.abs(y_nonlin[:,0]-y_dfl[:,0]))
