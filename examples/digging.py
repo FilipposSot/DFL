@@ -37,7 +37,7 @@ class Plant1(DFLDynamicPlant):
                               [0.0, 0.0]])
 
         self.A_cont_eta = np.array([[0.0, 0.0],
-                               [-1/m,-1/m]])
+                               [-1/m,-1/m,0.0]])
 
         self.B_cont_x = np.array([[0.0],[1.0]])
 
@@ -119,15 +119,17 @@ def rand_u_func(y,t):
     return np.random.normal(0.0,0.3)
 
 def sin_u_func(y,t):
+    return np.sin(3*t)
+
+def square_u_func(y,t):
     return 0.5*signal.square(3 * t)
-    # return np.sin(3*t) 
 
 if __name__== "__main__":
     ################# DFL MODEL TEST ##############################################
     plant1 = Plant1()
     dfl1 = DFL(plant1, dt_data = 0.05, dt_control = 0.2)
     setattr(plant1, "g", Plant1.gkoop2)
-    driving_fun = sin_u_func
+    driving_fun = square_u_func
     T = 11.0
 
     dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
@@ -141,7 +143,6 @@ if __name__== "__main__":
     
     t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, T, continuous = False)
     t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, T)
-
     t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0, driving_fun, T)
 
     sse_dfl = np.sum(np.abs(y_nonlin[:,0]-y_dfl[:,0]))
