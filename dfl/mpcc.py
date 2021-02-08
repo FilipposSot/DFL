@@ -76,6 +76,8 @@ class MPCC():
 
         self.temp_val = 0
         self.max_init_its = 100
+        self.t_last_plot = -1000000
+
         # optimization horizon
         self.N = N
 
@@ -92,8 +94,8 @@ class MPCC():
         self.x_min = np.concatenate((x_min,np.array([-10.5]))) 
         self.x_max = np.concatenate((x_max,np.array([0.0]))) 
        
-        self.u_min = np.concatenate((u_min,np.array([0.001]))) 
-        self.u_max = np.concatenate((u_max,np.array([0.5]))) 
+        self.u_min = np.concatenate((u_min,np.array([0.00001]))) 
+        self.u_max = np.concatenate((u_max,np.array([5.]))) 
 
         self.prob = osqp.OSQP()
 
@@ -191,6 +193,39 @@ class MPCC():
         P = sparse.block_diag([P,Rtilde])
         q = np.concatenate((q,np.zeros((self.N+1)*self.nv)))
 
+        # print("----------MPCC-----------")
+        # - quadratic objective
+        QQ = np.zeros((self.nx,self.nx))
+
+        QQ[2,2]= 5.0
+
+        QQ[3,3]= 0.0
+        # QQ[4,4]= 1.0
+        # QQ[5,5]= 1.0
+        QQN = QQ
+        
+        RR = 0.*np.eye(self.nv)
+        RR[2,2] = 0.0
+
+        xr = np.zeros(self.nx)
+        # xr[1] = -.4
+        xr[2] = 1.55
+
+        PP = sparse.block_diag([sparse.kron(sparse.eye(self.N), QQ), QQN,
+                                sparse.kron(sparse.eye(self.N+1), RR)], format='csc')
+        
+
+        qq = np.hstack([np.kron(np.ones(self.N), -QQ.dot(xr)), -QQN.dot(xr),
+                       np.zeros((self.N+1)*self.nv)])
+
+        P = P+PP
+        q = q+qq
+
+        # print(P.shape)
+        # print(q.shape)
+        # print(PP.shape)
+        # print(qq.shape)
+
         # fig = plt.figure()
         # ax = fig.add_subplot(1, 1, 1)
         # ax.plot(x_traj, y_traj,'.', color='tab:blue')
@@ -220,7 +255,7 @@ class MPCC():
             i_col_start = self.nx*i
             i_col_end = i_col_start  + self.nx
 
-            Ad_xi, Bd_xi, Kd_xi= self.get_linearized_model(x_array[i,:])
+            Ad_xi, Bd_xi, Kd_xi = self.get_linearized_model(x_array[i,:])
 
             Ad = np.zeros(( self.nx, self.nx))
             Ad[:self.nxi,:self.nxi] = Ad_xi
@@ -251,8 +286,9 @@ class MPCC():
         lineq = np.hstack([np.kron(np.ones(self.N+1), self.x_min), u_minus, np.kron(np.ones(self.N), self.u_min)])
         uineq = np.hstack([np.kron(np.ones(self.N+1), self.x_max), u_minus, np.kron(np.ones(self.N), self.u_max)])
         
-        # for i in range(self.N+1):
-        #     uineq[1+self.nx*i],_,_,_ = self.get_soil_surface(x_array[i,0])
+        for i in range(self.N+1):
+            uineq[1+self.nx*i],_,_,_ = self.get_soil_surface(x_array[i,0])
+        
         # print(lineq)
         # print(uineq)
 
@@ -291,14 +327,19 @@ class MPCC():
             Bd[:self.nxi,:self.nu] = Bd_xi
             Bd[-1,-1] = self.dt
 
-            x_array[i+1,:] = Ad.dot(x_array[i,:]) + Bd.dot(u_array[i,:])
+            Kd_x = np.concatenate((Kd_xi,np.array([0.])))
+
+            x_array[i+1,:] = Ad.dot(x_array[i,:]) + Bd.dot(u_array[i,:]) + Kd_x
 
         # plt.plot(x_array[:,0])
         # plt.plot(x_array[:,1])
+        # plt.plot(x_array[:,2])
+
         # plt.show()
 
-        # plt.plot(x_array[:,2])
         # plt.plot(x_array[:,3])
+        # plt.plot(x_array[:,4])
+        # plt.plot(x_array[:,5])
         # plt.show()
 
         # plt.plot(x_array[:,4])
@@ -339,30 +380,45 @@ class MPCC():
             if delta_u_norm < 0.001:
                 break
         
-        fig, axs = plt.subplots(5,1, figsize=(8,10))
-
-        axs[0] = self.draw_path(axs[0], x_array[0,-1], x_array[-1,-1])
-
-        axs[0].plot(x_array[:,0],x_array[:,1],marker=".")
-        # axs[0].plot(x_array[:,1],marker=".")
-
-        axs[1].plot(x_array[:,2],marker=".")
-        axs[1].plot(x_array[:,3],marker=".")
-
-        axs[2].plot(x_array[:,4],marker=".")
-        axs[2].plot(x_array[:,5],marker=".")
-
-        axs[3].plot(x_array[:,5],marker=".")
-        
-        axs[4].plot(u_array[:,0],marker=".")
-        axs[4].plot(u_array[:,1],'--',marker=".")
-
-
-        plt.show()
+        self.plot_opt(x_array, u_array)
 
         return x_array, u_array
 
+    def plot_opt(self, x_array,u_array):
 
+        fig, axs = plt.subplots(7,1, figsize=(8,10))
+
+        axs[0] = self.draw_path(axs[0], x_array[0,-1], x_array[-1,-1])
+        axs[0].plot(x_array[:,0], x_array[:,1], marker=".")
+        # axs[0].plot(x_array[:,1],marker=".")
+        
+        axs[1].plot(x_array[:,0],marker=".")
+        axs[1].plot(x_array[:,1],marker=".")
+        axs[1].plot(x_array[:,2],marker=".")
+
+        axs[2].plot(x_array[:,3],marker=".")
+        axs[2].plot(x_array[:,4],marker=".")
+        axs[2].plot(x_array[:,5],marker=".")
+
+        # axs[3].plot(x_array[:,6],marker=".")
+        # axs[3].plot(x_array[:,7],marker=".")
+        # axs[3].plot(x_array[:,8],marker=".")
+        
+        # axs[4].plot(x_array[:,9],marker=".")
+        # axs[4].plot(x_array[:,10],marker=".")
+
+        axs[4].plot(x_array[:,6],marker=".")
+        axs[4].plot(x_array[:,7],marker=".")
+        
+        
+        axs[5].plot(u_array[:,0],marker=".")
+        axs[5].plot(u_array[:,1],marker=".")
+        axs[5].plot(u_array[:,2],marker=".")
+
+        axs[6].plot(x_array[:,8],marker=".")
+        # axs[6].plot(x_array[:,11],marker=".")
+
+        plt.show()
 
     def setup_new_problem(self, Q, R, q_theta, x0, u_minus, t = 0):
         # sets up a new osqp mpc problem by determining all the 
@@ -383,14 +439,7 @@ class MPCC():
         # print(x_array[:,:7])
 
         P, q = self.generate_contouring_objective(self.Q, self.R, self.q_theta, x_array)
-        
-        print(x0.shape)
-        print(u_minus.shape)
-        print(x_array.shape)
-
         A, l, u = self.generate_contouring_constraints(x0, u_minus, x_array)
-
-
 
         self.u_array = u_array[:]
         self.x_array = x_array[:]
@@ -403,7 +452,7 @@ class MPCC():
 
         self.prob.setup(P, q, A, l, u, warm_start = False, verbose = False, polish = 1)
         solved, result  = self.solve()
-        self.plot_result(result)
+        # self.plot_result(result)
 
         # exit()
 
@@ -419,8 +468,6 @@ class MPCC():
 
         x0 = np.concatenate((xi0, np.array([self.x_array[0,-1] + self.dt*u_minus[-1]])))
 
-        print("xi_0: ",x0 )
-        print("u_miuns: ",u_minus )
         # x0 = np.concatenate((xi0,np.expand_dims(self.x_array[0,-1],axis=0)))
         x_array = self.x_array[:]
         
@@ -473,6 +520,7 @@ class MPCC():
         ax = fig.add_subplot(1, 1, 1)
         ax.plot(x_optimal[:,0], x_optimal[:,1],'.', color='tab:blue')
         ax = self.draw_path(ax, x_optimal[0,-1], x_optimal[-1,-1])
+        ax = self.draw_soil(ax,x_optimal[0,0], x_optimal[-1,0])
         ax.axis('equal')
         plt.show()
         
@@ -489,6 +537,19 @@ class MPCC():
 
         return ax
 
+    def draw_soil(self,ax,x_min,x_max):
+        # for now lets keep this a very simple path: a circle
+        x = np.linspace(x_min,x_max, 100)
+        y = np.zeros(x.shape)
+        
+        for i in range(len(x)):
+           y[i],_,_,_ = self.get_soil_surface(x[i])
+        
+        ax.plot(x, y, 'k--')
+
+        return ax
+
+
     def control_function(self, xi, t):
         # callable control function
         self.update_problem(xi, self.u_minus)
@@ -499,7 +560,11 @@ class MPCC():
             u = u_optimal[0,:self.nu]
             self.u_minus = u_optimal[0,:self.nv]
             
-            print("optimal input:", self.u_minus )
+            if t-self.t_last_plot > 2.5:
+                self.plot_opt(x_optimal, u_optimal)
+                self.t_last_plot = t
+
+            # print("optimal input:", self.u_minus )
 
             # fig = plt.figure()
             # ax = fig.add_subplot(1, 1, 1)
@@ -522,7 +587,7 @@ class MPCC():
         else:
             print('Failed to find MPC solution')
             
-            return(self.u_minus[:2])
+            return(self.u_minus[:self.nu])
 
             # fig = plt.figure()
             # ax = fig.add_subplot(1, 1, 1)

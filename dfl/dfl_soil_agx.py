@@ -35,7 +35,7 @@ class DFLSoil():
         self.plant = dynamic_plant
         self.dt_data = dt_data 
         self.dt_control = dt_control 
-        self.n_s = 3
+        self.n_s = 2
 
         self.H_disc_x   = np.zeros((self.plant.n_eta,self.plant.n_x))
         self.H_disc_eta = np.zeros((self.plant.n_eta,self.plant.n_eta)) 
@@ -88,7 +88,56 @@ class DFLSoil():
         # print('----------------------------------')
         # print(self.A_disc_x)
         # print(A_disc_x_2)
+    
+    def regress_model_custom(self, X, Eta, U, S):
+        '''
+        regress the H matrix for DFL model
+        '''
+        X_minus   = X[:,:-1,:]
+        Eta_minus = Eta[:,:-1,:]
+        U_minus   = U[:,:-1,:]
+        S_minus   = S[:,:-1,:-1]
 
+        X_plus   = X[:,1:,:]
+        Eta_plus = Eta[:,1:,:]
+        U_plus   = U[:,1:,:]
+        S_plus   = S[:,1:,:-1]
+
+        U_minus_zero_torque   = copy.deepcopy(U[:,:-1,:])
+        U_minus_zero_torque[:,:,2] = 0.0
+
+        omega = np.concatenate((X_minus.reshape(-1, X_minus.shape[-1]),
+                                Eta_minus.reshape(-1, Eta_minus.shape[-1]),
+                                S_minus.reshape(-1, S_minus.shape[-1]),
+                                U_minus.reshape(-1, U_minus.shape[-1])),axis=1).T
+
+        omega_zero_torque = np.concatenate((X_minus.reshape(-1, X_minus.shape[-1]),
+                                Eta_minus.reshape(-1, Eta_minus.shape[-1]),
+                                S_minus.reshape(-1, S_minus.shape[-1]),
+                                U_minus_zero_torque.reshape(-1, U_minus_zero_torque.shape[-1])),axis=1).T
+
+        Y = Eta_plus.reshape(-1, Eta_plus.shape[-1]).T
+
+        H_disc = lstsq(omega.T,Y.T,rcond=None)[0].T
+
+        H_disc_zero_torque = lstsq(omega_zero_torque.T,Y.T,rcond=None)[0].T
+
+        H_disc[:2,:] =  H_disc_zero_torque[:2,:] 
+
+        self.H_disc_x   = H_disc[:,:self.plant.n_x]
+        self.H_disc_eta = H_disc[:, self.plant.n_x                                : self.plant.n_x + self.plant.n_eta]
+        self.H_disc_s   = H_disc[:, self.plant.n_x + self.plant.n_eta             : self.plant.n_x + self.plant.n_eta + self.n_s]
+        self.H_disc_u   = H_disc[:, self.plant.n_x + self.plant.n_eta  + self.n_s : self.plant.n_x + self.plant.n_eta + self.n_s + self.plant.n_u]
+
+        H_disc_u_zero_torque =  H_disc_zero_torque[:, self.plant.n_x + self.plant.n_eta  + self.n_s : self.plant.n_x + self.plant.n_eta + self.n_s + self.plant.n_u]
+
+        (self.A_disc_x, self.B_disc_x,_,_,_) = cont2discrete((self.plant.A_cont_x, self.plant.B_cont_x, 
+                                                            np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
+                                                            self.dt_data)
+        
+        (_,self.A_disc_eta ,_,_,_)   = cont2discrete((self.plant.A_cont_x, self.plant.A_cont_eta, 
+                                                    np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
+                                                    self.dt_data)
 
     def regress_model_new(self, X, Eta, U, S):
         '''
@@ -97,12 +146,12 @@ class DFLSoil():
         X_minus   = X[:,:-1,:]
         Eta_minus = Eta[:,:-1,:]
         U_minus   = U[:,:-1,:]
-        S_minus   = S[:,:-1,:]
+        S_minus   = S[:,:-1,:-1]
 
         X_plus   = X[:,1:,:]
         Eta_plus = Eta[:,1:,:]
         U_plus   = U[:,1:,:]
-        S_plus   = S[:,1:,:]
+        S_plus   = S[:,1:,:-1]
 
         omega = np.concatenate((X_minus.reshape(-1, X_minus.shape[-1]),
                                 Eta_minus.reshape(-1, Eta_minus.shape[-1]),
@@ -212,11 +261,17 @@ class DFLSoil():
 
 
     def linearize_soil_dynamics(self, x_nom):
-
+        
+        # print('---------------------------')
         s_nom, s_dash_nom, s_dash_dash_nom, s_dash_dash_dash_nom = self.soilShapeEvaluator.soil_surf_eval(x_nom[0])
+        # print('x: ',x_nom[0])
+        # print('s: ', s_nom)
 
-        sigma_zero   =  np.array([s_nom, s_dash_nom, s_dash_dash_nom]) 
-        sigma_zero_d =  np.array([s_dash_nom, s_dash_dash_nom, s_dash_dash_dash_nom])
+        # sigma_zero   =  np.array([s_nom, s_dash_nom, s_dash_dash_nom]) 
+        # sigma_zero_d =  np.array([s_dash_nom, s_dash_dash_nom, s_dash_dash_dash_nom])
+
+        sigma_zero   =  np.array([s_nom, s_dash_nom]) 
+        sigma_zero_d =  np.array([s_dash_nom, s_dash_dash_nom])
 
         T = np.zeros((self.n_s,self.plant.n_x))
         T[:,0] = 1.0
@@ -229,7 +284,22 @@ class DFLSoil():
         B_lin = np.block([[self.B_disc_x],
                           [self.H_disc_u]])
 
+        # B_lin[3,2] =0.0
+        # B_lin[4,2] =0.0
+
+
+        # print('-----------------------------')
+        # print(x_nom[2])
+        # print(B_lin)
+        # B_lin[0,2] =  B_lin[0,2] + self.dt_data*( -0.738*np.sin(x_nom[2]))
+        # B_lin[1,2] =  B_lin[1,2] + self.dt_data*(  0.738*np.cos(x_nom[2]))
+        # print(B_lin)
+
         # constant bias term
+        # print('Hs: ', self.H_disc_s)
+        # print('K1: ', sigma_zero )
+        # print('K2: ', -sigma_zero_d)
+
         K_lin_eta = self.H_disc_s.dot(sigma_zero) - self.H_disc_s.dot(sigma_zero_d)*x_nom[0]
         K_lin = np.concatenate((np.zeros(self.plant.n_x),K_lin_eta))
 
@@ -262,11 +332,10 @@ class DFLSoil():
         if not isinstance(u,np.ndarray):
             u = np.array([u])
         
-        # A_lin, B_lin, K_lin = self.linearize_soil_dynamics(x)
-        A_lin, B_lin, K_lin = self.linearize_soil_dynamics_no_surface(x)
-
+        A_lin, B_lin, K_lin = self.linearize_soil_dynamics(x)
+        # A_lin, B_lin, K_lin = self.linearize_soil_dynamics_no_surface(x)
         # y_plus = np.dot(self.K_x,x) + np.dot(self.K_u, u)
-        y_plus = np.dot(A_lin,x) + np.dot(B_lin, u)
+        y_plus = np.dot(A_lin,x) + np.dot(B_lin, u) + K_lin
 
         return y_plus
         
