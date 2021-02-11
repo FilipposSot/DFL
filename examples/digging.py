@@ -26,20 +26,18 @@ class Plant1(DFLDynamicPlant):
     
     def __init__(self):
         
-        self.n_x = 2
+        self.n_x = 7
         self.n_eta = 2
-        self.n_u = 1
+        self.n_u = 2
 
         self.n = self.n_x + self.n_eta
 
         # User defined matrices for DFL
-        self.A_cont_x  = np.array([[0.0, 1.0],
-                              [0.0, 0.0]])
+        self.A_cont_x  = np.zeros((self.n_x,self.n_x))
 
-        self.A_cont_eta = np.array([[0.0, 0.0],
-                               [-1/m,-1/m,0.0]])
+        self.A_cont_eta = np.zeros((self.n_x,self.n_eta))
 
-        self.B_cont_x = np.array([[0.0],[1.0]])
+        self.B_cont_x = np.zeros((self.n_x,self.n_u))
 
         # Limits for inputs and states
         self.x_min = np.array([-2.0,-2.0])
@@ -50,15 +48,15 @@ class Plant1(DFLDynamicPlant):
 
 
     # functions defining constituitive relations for this particular system
-    @staticmethod
-    def phi_c1(q):
-        e = k11*q + k13*q**3
-        return e
+    # @staticmethod
+    # def phi_c1(q):
+    #     e = k11*q + k13*q**3
+    #     return e
 
-    @staticmethod
-    def phi_r1(f):
-        e = b1*np.sign(f)*f**2
-        return e
+    # @staticmethod
+    # def phi_r1(f):
+    #     e = b1*np.sign(f)*f**2
+    #     return e
     
     # nonlinear state equations
     def f(self,t,x,u):
@@ -73,9 +71,9 @@ class Plant1(DFLDynamicPlant):
     # nonlinear observation equations
     @staticmethod
     def g(t,x,u):
-        q,v = x[0], x[1]
-        y = np.array([q,v])
-        return y 
+        # q,v = x[0], x[1]
+        # y = np.array([q,v])
+        return np.copy(x)
     
     @staticmethod
     def gkoop1(t,x,u):
@@ -127,12 +125,13 @@ def square_u_func(y,t):
 if __name__== "__main__":
     ################# DFL MODEL TEST ##############################################
     plant1 = Plant1()
-    dfl1 = DFL(plant1, dt_data = 0.05, dt_control = 0.2)
-    setattr(plant1, "g", Plant1.gkoop2)
+    dfl1 = DFL(plant1, dt_data = 0.02, dt_control = 0.2)
+    setattr(plant1, "g", Plant1.g)
     driving_fun = square_u_func
     T = 11.0
 
-    dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
+    # dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
+    dfl1.generate_data_from_file('data.npz')
     dfl1.learn_eta_fn()
     dfl1.generate_DFL_disc_model()
     dfl1.regress_K_matrix()

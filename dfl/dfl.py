@@ -34,7 +34,7 @@ torch.manual_seed(seed)
 np.random.seed(seed = seed)
 
 RETRAIN = True
-RETRAIN = False
+# RETRAIN = False
 
 def step(x_batch, y_batch, model, loss_fn):
     # Send data to GPU if applicable
@@ -590,6 +590,49 @@ class DFL():
         self.U_plus = np.array(U_plus_data)
         self.X_plus = np.array(X_plus_data)
         self.Eta_plus = np.array(Eta_plus_data)
+
+    def generate_data_from_file(self, file_name):
+        '''
+        Load the data with:
+        data = np.load(file_name)
+        t = data['t']
+        x = data['x']
+        e = data['e']
+        s = data['s']
+        u = data['u']
+        t: time
+        x = [x, y] ,  e=[v_x,v_y,e_x,e_y,m], s= [s,s',s''], u = [u_x,u_y]
+        so the three variables in s are the height of the soil at the bucket tip location and the gradients
+        The shape of each of those numpy arrays will be (Number of trajectories, time steps, variable)
+        m is an estimate of the soil mass being moved by the bucket
+        e_ are forces from the soil acting on the bucket
+        the thing is those arent realistically measurable
+        The simulation software is hybrid in that it converts the parts of its soil mesh which the bucket is moving into particles which it simulates discretely. This is the mass of those particles.
+        What I will say is that e_x e_y and m are not easily measureable quantities
+        '''
+
+        data = np.load(file_name)
+        t = data['t']
+        x = data['x']
+        e = data['e']
+        s = data['s']
+        u = data['u']
+
+        self.      t_data = t
+        self.      x_data = np.concatenate((x,e),2)
+        self.      u_data = u
+        self.    eta_data = s[:,:,:2]
+        self.eta_dot_data = s[:,:,1:]
+
+        self.  Y_minus = np.copy(self.  x_data[:, :-1,:])
+        self.  U_minus =         self.  u_data[:, :-1,:]
+        self.  X_minus =         self.  x_data[:, :-1,:]
+        self.Eta_minus =         self.eta_data[:, :-1,:]
+
+        self.  Y_plus  = np.copy(self.  x_data[:,1:  ,:])
+        self.  U_plus  =         self.  u_data[:,1:  ,:]
+        self.  X_plus  =         self.  x_data[:,1:  ,:]
+        self.Eta_plus  =         self.eta_data[:,1:  ,:]
 
     def simulate_system_nonlinear(self, x_0, u_func, t_f):
 
