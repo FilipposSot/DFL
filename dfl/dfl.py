@@ -34,7 +34,7 @@ torch.manual_seed(seed)
 np.random.seed(seed = seed)
 
 RETRAIN = True
-# RETRAIN = False
+RETRAIN = False
 
 def step(x_batch, y_batch, model, loss_fn):
     # Send data to GPU if applicable
@@ -611,6 +611,10 @@ class DFL():
         What I will say is that e_x e_y and m are not easily measureable quantities
         '''
 
+        # Set index for testing
+        test_ndx = 1 # 1, 7
+
+        # Extract data from file
         data = np.load(file_name)
         t = data['t']
         x = data['x']
@@ -618,17 +622,34 @@ class DFL():
         s = data['s']
         u = data['u']
 
+        # Assemble data into paradigm
         self.      t_data = t
         self.      x_data = np.concatenate((x,e),2)
         self.      u_data = u
         self.    eta_data = s[:,:,:2]
         self.eta_dot_data = s[:,:,1:]
 
+        # Set aside test data
+        self.      t_data_test = np.copy(self.      t_data[test_ndx])
+        self.      x_data_test = np.copy(self.      x_data[test_ndx])
+        self.      u_data_test = np.copy(self.      u_data[test_ndx])
+        self.    eta_data_test = np.copy(self.    eta_data[test_ndx])
+        self.eta_dot_data_test = np.copy(self.eta_dot_data[test_ndx])
+
+        # Remove test data from training data
+        self.      t_data = np.delete(self.      t_data,test_ndx,0)
+        self.      x_data = np.delete(self.      x_data,test_ndx,0)
+        self.      u_data = np.delete(self.      u_data,test_ndx,0)
+        self.    eta_data = np.delete(self.    eta_data,test_ndx,0)
+        self.eta_dot_data = np.delete(self.eta_dot_data,test_ndx,0)
+
+        # Inputs
         self.  Y_minus = np.copy(self.  x_data[:, :-1,:])
         self.  U_minus =         self.  u_data[:, :-1,:]
         self.  X_minus =         self.  x_data[:, :-1,:]
         self.Eta_minus =         self.eta_data[:, :-1,:]
 
+        # Outputs
         self.  Y_plus  = np.copy(self.  x_data[:,1:  ,:])
         self.  U_plus  =         self.  u_data[:,1:  ,:]
         self.  X_plus  =         self.  x_data[:,1:  ,:]
@@ -679,34 +700,34 @@ class DFL():
                                         continuous = False)
         return t, u, xi, y 
 
-    def simulate_system_hybrid(self, x_0, u_func, t_f):
+    # def simulate_system_hybrid(self, x_0, u_func, t_f):
 
-        u_minus = np.zeros((self.plant.n_u,1))
-        xi_0 = self.get_best_initial_hybrid(x_0, u_func, t_f)
-        t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
-                                        u_func, self.dt_control, self.f_disc_hybrid, self.g_disc_hybrid,
-                                        continuous = False)
+    #     u_minus = np.zeros((self.plant.n_u,1))
+    #     xi_0 = self.get_best_initial_hybrid(x_0, u_func, t_f)
+    #     t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
+    #                                     u_func, self.dt_control, self.f_disc_hybrid, self.g_disc_hybrid,
+    #                                     continuous = False)
 
-        return t,u,xi,y
+    #     return t,u,xi,y
     
-    def get_best_initial_hybrid(self, x_0, u_func, t_f):
+    # def get_best_initial_hybrid(self, x_0, u_func, t_f):
 
-        u_0 = np.zeros((self.plant.n_u,1))
-        eta_0 = self.plant.phi_hybrid(0.0, x_0, u_0)
-        xi_0 = np.linalg.pinv(self.C_til).dot(eta_0 - self.D_til_1.dot(x_0) -self.D_til_2.dot(u_0)[:,0])
+    #     u_0 = np.zeros((self.plant.n_u,1))
+    #     eta_0 = self.plant.phi_hybrid(0.0, x_0, u_0)
+    #     xi_0 = np.linalg.pinv(self.C_til).dot(eta_0 - self.D_til_1.dot(x_0) -self.D_til_2.dot(u_0)[:,0])
 
-        z_0 = np.concatenate((x_0,xi_0))
+    #     z_0 = np.concatenate((x_0,xi_0))
 
-        return z_0 
+    #     return z_0 
 
-    def simulate_system_sid(self, x_0, u_func, t_f):
+    # def simulate_system_sid(self, x_0, u_func, t_f):
 
-        u_minus = np.zeros((self.plant.n_u,1))
-        xi_0 = np.linalg.pinv(self.C_disc_sid).dot(x_0)  #self.get_best_initial_sid(x_0, u_func, t_f)
-        t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
-                                        u_func, self.dt_control, self.f_disc_sid, self.g_disc_sid,
-                                        continuous = False)
-        return t,u,xi,y
+    #     u_minus = np.zeros((self.plant.n_u,1))
+    #     xi_0 = np.linalg.pinv(self.C_disc_sid).dot(x_0)  #self.get_best_initial_sid(x_0, u_func, t_f)
+    #     t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
+    #                                     u_func, self.dt_control, self.f_disc_sid, self.g_disc_sid,
+    #                                     continuous = False)
+    #     return t,u,xi,y
 
     # def get_best_initial_sid(self, x_0, u_func, t_f):
 

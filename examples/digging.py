@@ -126,42 +126,47 @@ if __name__== "__main__":
     ################# DFL MODEL TEST ##############################################
     plant1 = Plant1()
     dfl1 = DFL(plant1, dt_data = 0.02, dt_control = 0.2)
-    setattr(plant1, "g", Plant1.g)
+    setattr(plant1, "g", Plant1.gkoop2)
     driving_fun = square_u_func
-    T = 11.0
+    T = 4.98
 
     # dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
     dfl1.generate_data_from_file('data.npz')
     dfl1.learn_eta_fn()
-    dfl1.generate_DFL_disc_model()
+    # dfl1.generate_DFL_disc_model()
     dfl1.regress_K_matrix()
 
-    x_0 = np.array([0,0])
+    driving_fun = lambda y,t : dfl1.u_data_test[round(t)]
+    x_0 = dfl1.x_data_test[0]
 
-    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, T)
+    # t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, T)
+    t = dfl1.t_data_test
+    u_nonlin = dfl1.u_data_test
+    x_nonlin = dfl1.x_data_test
+    y_nonlin = dfl1.x_data_test
     
-    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, T, continuous = False)
-    t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, T)
+    # t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, T, continuous = False)
     t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0, driving_fun, T)
+    t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, T)
 
-    sse_dfl = np.sum(np.abs(y_nonlin[:,0]-y_dfl[:,0]))
-    sse_kop = np.sum(np.abs(y_nonlin[:,0]-y_koop[:,0]))
-    sse_lrn = np.sum(np.abs(y_nonlin[:,0]-y_lrn[:,0]))
-    print(sse_dfl)
-    print(sse_kop)
-    print(sse_lrn)
+    # sse_dfl = np.sum(np.abs(y_nonlin[:,0]-y_dfl[:,0]))
+    # sse_kop = np.sum(np.abs(y_nonlin[:,0]-y_koop[:,0]))
+    # sse_lrn = np.sum(np.abs(y_nonlin[:,0]-y_lrn[:,0]))
+    # # print(sse_dfl)
+    # print(sse_kop)
+    # print(sse_lrn)
     
     fig, axs = plt.subplots(3, 1)
 
     axs[0].plot(t, y_nonlin[:,0], 'k', label='True')
     axs[0].plot(t, y_koop[:,0] ,'g-.', label='Koopman')
-    axs[0].plot(t, y_dfl[:,0] ,'r-.', label='DFL')
+    # axs[0].plot(t, y_dfl[:,0] ,'r-.', label='DFL')
     axs[0].plot(t, y_lrn[:,0] ,'b-.', label='L3')
     axs[0].legend()
 
     axs[1].plot(t, y_nonlin[:,1],'k')
     axs[1].plot(t, y_koop[:,1] ,'g-.')
-    axs[1].plot(t, y_dfl[:,1],'r-.')
+    # axs[1].plot(t, y_dfl[:,1],'r-.')
     axs[1].plot(t, y_lrn[:,1],'b-.')
   
     axs[2].plot(t, u_nonlin,'k')
@@ -169,7 +174,7 @@ if __name__== "__main__":
     axs[2].set_xlabel('time')
     
     axs[0].set_ylabel('x')
-    axs[1].set_ylabel('v')
+    axs[1].set_ylabel('y')
     axs[2].set_ylabel('u')
 
     plt.show()
