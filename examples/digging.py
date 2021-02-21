@@ -27,7 +27,7 @@ class Plant1(DFLDynamicPlant):
     def __init__(self):
         
         self.n_x = 7
-        self.n_eta = 2
+        self.n_eta = 7
         self.n_u = 2
 
         self.n = self.n_x + self.n_eta

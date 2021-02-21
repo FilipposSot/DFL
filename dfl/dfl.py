@@ -35,7 +35,7 @@ torch.manual_seed(seed)
 np.random.seed(seed = seed)
 
 RETRAIN = True
-RETRAIN = False
+# RETRAIN = False
 
 def step(x_batch, y_batch, model, loss_fn):
     # Send data to GPU if applicable
@@ -69,8 +69,8 @@ class DFL():
         N_train = int(3*len(y)/5)
         train_dataset, val_dataset = random_split(dataset, [N_train,len(y)-N_train])
 
-        train_loader = DataLoader(dataset=train_dataset, batch_size=50)
-        val_loader   = DataLoader(dataset=val_dataset  , batch_size=50)
+        train_loader = DataLoader(dataset=train_dataset, batch_size=200)
+        val_loader   = DataLoader(dataset=val_dataset  , batch_size=200)
 
         loss_fn = torch.nn.MSELoss(reduction='sum')
 
@@ -130,7 +130,7 @@ class DFL():
         u_minus = torch.transpose(torch.from_numpy(self.U_minus.reshape(-1, self.U_minus.shape[-1])).type(dtype), 0,1)
         x_plus  = torch.transpose(torch.from_numpy(self.X_plus .reshape(-1, self.X_plus .shape[-1])).type(dtype), 0,1)
 
-        self.model = LearnedDFL(self.plant.n_x, self.plant.n_eta, self.plant.n_u, 256)
+        self.model = LearnedDFL(self.plant.n_x, self.plant.n_eta, self.plant.n_u, 256, False)
 
         if RETRAIN:
             self.model = self.train_model(self.model, torch.cat((x_minus, u_minus), 0), x_plus)
@@ -635,7 +635,7 @@ class DFL():
         '''
 
         # Set index for testing
-        test_ndx = 1 # 1, 7
+        test_ndx = 2 # 1, 7
 
         # Extract data from file
         data = np.load(file_name)
@@ -664,12 +664,12 @@ class DFL():
         self.           y_test = np.copy(self.      y_data[test_ndx])
 
         # Remove test data from training data
-        # self.      t_data = np.delete(self.      t_data,test_ndx,0)
-        # self.      x_data = np.delete(self.      x_data,test_ndx,0)
-        # self.      u_data = np.delete(self.      u_data,test_ndx,0)
-        # self.    eta_data = np.delete(self.    eta_data,test_ndx,0)
-        # self.eta_dot_data = np.delete(self.eta_dot_data,test_ndx,0)
-        # self.      y_data = np.delete(self.      y_data,test_ndx,0)
+        self.      t_data = np.delete(self.      t_data,test_ndx,0)
+        self.      x_data = np.delete(self.      x_data,test_ndx,0)
+        self.      u_data = np.delete(self.      u_data,test_ndx,0)
+        self.    eta_data = np.delete(self.    eta_data,test_ndx,0)
+        self.eta_dot_data = np.delete(self.eta_dot_data,test_ndx,0)
+        self.      y_data = np.delete(self.      y_data,test_ndx,0)
 
         # Inputs
         self.  Y_minus = np.copy(self.  y_data[:, :-1,:])
