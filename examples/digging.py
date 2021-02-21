@@ -46,7 +46,6 @@ class Plant1(DFLDynamicPlant):
         self.u_min = np.array([-2.5])
         self.u_max = np.array([ 2.5])
 
-
     # functions defining constituitive relations for this particular system
     # @staticmethod
     # def phi_c1(q):
@@ -75,24 +74,23 @@ class Plant1(DFLDynamicPlant):
         # y = np.array([q,v])
         return np.copy(x)
     
-    @staticmethod
-    def gkoop1(t,x,u):
-        q,v = x[0], x[1]
-        y = np.array([q,v,Plant1.phi_c1(q), Plant1.phi_r1(v)])
-        return y  
+    # @staticmethod
+    # def gkoop1(t,x,u):
+    #     q,v = x[0], x[1]
+    #     y = np.array([q,v,Plant1.phi_c1(q), Plant1.phi_r1(v)])
+    #     return y  
     
-    @staticmethod
-    def gkoop2(t,x,u):
-        q,v = x[0],x[1]
+    # @staticmethod
+    # def gkoop2(t,x,u):
+    #     q,v = x[0],x[1]
 
-        y = np.array([q,v,q**2,q**3,q**4,q**5,q**6,q**7,
-                      v**2,v**3,v**4,v**5,v**6,v**7,v**9,v**11,v**13,v**15,v**17,v**19,
-                      v*q,v*q**2,v*q**3,v*q**4,v*q**5,
-                      v**2*q,v**2*q**2,v**2*q**3,v**2*q**4,v**2
-                      *q**5,
-                      v**3*q,v**3*q**2,v**3*q**3,v**3*q**4,v**3*q**5])
-        return y 
-
+    #     y = np.array([q,v,q**2,q**3,q**4,q**5,q**6,q**7,
+    #                   v**2,v**3,v**4,v**5,v**6,v**7,v**9,v**11,v**13,v**15,v**17,v**19,
+    #                   v*q,v*q**2,v*q**3,v*q**4,v*q**5,
+    #                   v**2*q,v**2*q**2,v**2*q**3,v**2*q**4,v**2
+    #                   *q**5,
+    #                   v**3*q,v**3*q**2,v**3*q**3,v**3*q**4,v**3*q**5])
+    #     return y 
 
     # auxiliary variables (outputs from nonlinear elements)
     def phi(self,t,x,u):
@@ -126,7 +124,6 @@ if __name__== "__main__":
     ################# DFL MODEL TEST ##############################################
     plant1 = Plant1()
     dfl1 = DFL(plant1, dt_data = 0.02, dt_control = 0.2)
-    setattr(plant1, "g", Plant1.gkoop2)
     driving_fun = square_u_func
     T = 4.98
 
@@ -163,11 +160,13 @@ if __name__== "__main__":
     # axs[0].plot(t, y_dfl[:,0] ,'r-.', label='DFL')
     axs[0].plot(t, y_lrn[:,0] ,'b-.', label='L3')
     axs[0].legend()
+    axs[0].set_ylim(-5,5)
 
     axs[1].plot(t, y_nonlin[:,1],'k')
     axs[1].plot(t, y_koop[:,1] ,'g-.')
     # axs[1].plot(t, y_dfl[:,1],'r-.')
     axs[1].plot(t, y_lrn[:,1],'b-.')
+    axs[1].set_ylim(-5,5)
   
     axs[2].plot(t, u_nonlin,'k')
 

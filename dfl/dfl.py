@@ -12,6 +12,7 @@ import numpy as np
 from numpy.linalg import lstsq
 from scipy.linalg import expm
 from numpy.linalg import inv
+from itertools import combinations_with_replacement
 
 from scipy.integrate import ode
 from scipy.signal import savgol_filter
@@ -51,11 +52,12 @@ def step(x_batch, y_batch, model, loss_fn):
     return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
 
 class DFL():
-    def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1):
+    def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1, n_koop=15):
         
         self.plant = dynamic_plant
         self.dt_data = dt_data 
         self.dt_control = dt_control
+        self.n_koop = n_koop
 
     def train_model(self, model, x, y, title=None):
         # Reshape x and y to be vector of tensors
@@ -241,7 +243,7 @@ class DFL():
         Y = self.Y_plus.reshape(-1, self.Y_plus.shape[-1]).T
 
         G = lstsq(omega.T,Y.T,rcond=None)[0].T
-        
+
         self.A_disc_koop = G[: , :self.Y_plus.shape[-1]] 
         self.B_disc_koop = G[: , self.Y_plus.shape[-1]:]
 
@@ -398,6 +400,27 @@ class DFL():
         y = np.dot(self.C_disc_sid, x) + np.dot(self.D_disc_sid, u)
         
         return y
+
+    def g_koop_poly(self,x,m):
+        # Assert that we are operating on a single state estimate, x
+        assert len(np.shape(x))==1
+
+        # Initialize output
+        y = []
+
+        # Initialize polynomial degree
+        deg = 1
+
+        # Repeat until y is full:
+        while len(y)<m:
+            # For all monomials of x of degree deg:
+            for phi in combinations_with_replacement(x, deg):
+                # Append the value of the monomial to the output
+                y.append(np.prod(phi))
+            deg+= 1
+        
+        # Trim excess monomials from output
+        return y[:m]
     
     # def g_disc_hybrid(self,t,x,u):
 
@@ -621,6 +644,8 @@ class DFL():
         e = data['e']
         s = data['s']
         u = data['u']
+        n_traj = len(t)
+        n_t = len(t[0])
 
         # Assemble data into paradigm
         self.      t_data = t
@@ -628,6 +653,7 @@ class DFL():
         self.      u_data = u
         self.    eta_data = s[:,:,:2]
         self.eta_dot_data = s[:,:,1:]
+        self.      y_data = np.reshape([self.g_koop_poly(xs,self.n_koop) for traj in self.x_data for xs in traj], (n_traj, n_t, -1))
 
         # Set aside test data
         self.      t_data_test = np.copy(self.      t_data[test_ndx])
@@ -635,22 +661,24 @@ class DFL():
         self.      u_data_test = np.copy(self.      u_data[test_ndx])
         self.    eta_data_test = np.copy(self.    eta_data[test_ndx])
         self.eta_dot_data_test = np.copy(self.eta_dot_data[test_ndx])
+        self.           y_test = np.copy(self.      y_data[test_ndx])
 
         # Remove test data from training data
-        self.      t_data = np.delete(self.      t_data,test_ndx,0)
-        self.      x_data = np.delete(self.      x_data,test_ndx,0)
-        self.      u_data = np.delete(self.      u_data,test_ndx,0)
-        self.    eta_data = np.delete(self.    eta_data,test_ndx,0)
-        self.eta_dot_data = np.delete(self.eta_dot_data,test_ndx,0)
+        # self.      t_data = np.delete(self.      t_data,test_ndx,0)
+        # self.      x_data = np.delete(self.      x_data,test_ndx,0)
+        # self.      u_data = np.delete(self.      u_data,test_ndx,0)
+        # self.    eta_data = np.delete(self.    eta_data,test_ndx,0)
+        # self.eta_dot_data = np.delete(self.eta_dot_data,test_ndx,0)
+        # self.      y_data = np.delete(self.      y_data,test_ndx,0)
 
         # Inputs
-        self.  Y_minus = np.copy(self.  x_data[:, :-1,:])
+        self.  Y_minus = np.copy(self.  y_data[:, :-1,:])
         self.  U_minus =         self.  u_data[:, :-1,:]
         self.  X_minus =         self.  x_data[:, :-1,:]
         self.Eta_minus =         self.eta_data[:, :-1,:]
 
         # Outputs
-        self.  Y_plus  = np.copy(self.  x_data[:,1:  ,:])
+        self.  Y_plus  = np.copy(self.  y_data[:,1:  ,:])
         self.  U_plus  =         self.  u_data[:,1:  ,:]
         self.  X_plus  =         self.  x_data[:,1:  ,:]
         self.Eta_plus  =         self.eta_data[:,1:  ,:]
@@ -693,10 +721,10 @@ class DFL():
     def simulate_system_koop(self, x_0, u_func, t_f):
 
         u_minus = np.zeros((self.plant.n_u,1))
-        xi_0 = self.plant.g(0.0, x_0, u_minus)
+        xi_0 = self.g_koop_poly(x_0, self.n_koop)
 
         t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
-                                        u_func,self.dt_control, self.f_disc_koop, self.plant.g,
+                                        u_func,self.dt_control, self.f_disc_koop, lambda t,x,u : self.g_koop_poly(x,self.n_koop),
                                         continuous = False)
         return t, u, xi, y 
 
