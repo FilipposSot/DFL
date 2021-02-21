@@ -35,21 +35,7 @@ torch.manual_seed(seed)
 np.random.seed(seed = seed)
 
 RETRAIN = True
-# RETRAIN = False
-
-def step(x_batch, y_batch, model, loss_fn):
-    # Send data to GPU if applicable
-    x_batch = x_batch.to(device)
-    y_batch = y_batch.to(device)
-
-    x_t = y_batch
-
-    eta_t = model.g(x_t)
-
-    x_hat, eta_hat = model(x_batch)
-
-    # Return 
-    return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
+RETRAIN = False
 
 class DFL():
     def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1, n_koop=15):
@@ -58,6 +44,20 @@ class DFL():
         self.dt_data = dt_data 
         self.dt_control = dt_control
         self.n_koop = n_koop
+
+    def step(self, x_batch, y_batch, model, loss_fn):
+        # Send data to GPU if applicable
+        x_batch = x_batch.to(device)
+        y_batch = y_batch.to(device)
+
+        x_t = y_batch
+
+        eta_t = model.g(x_t)
+
+        x_hat, eta_hat = model(x_batch)
+
+        # Return 
+        return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
 
     def train_model(self, model, x, y, title=None):
         # Reshape x and y to be vector of tensors
@@ -69,8 +69,8 @@ class DFL():
         N_train = int(3*len(y)/5)
         train_dataset, val_dataset = random_split(dataset, [N_train,len(y)-N_train])
 
-        train_loader = DataLoader(dataset=train_dataset, batch_size=200)
-        val_loader   = DataLoader(dataset=val_dataset  , batch_size=200)
+        train_loader = DataLoader(dataset=train_dataset, batch_size=32)
+        val_loader   = DataLoader(dataset=val_dataset  , batch_size=32)
 
         loss_fn = torch.nn.MSELoss(reduction='sum')
 
@@ -90,8 +90,8 @@ class DFL():
             with torch.no_grad():
                 val_losses = []
                 for x_val, y_val in val_loader:
-                    val_loss = step(x_val, y_val, model, loss_fn).item()
-                    val_losses.append(val_loss)
+                    val_loss = self.step(x_val, y_val, model, loss_fn)
+                    val_losses.append(val_loss.item())
                 validation_loss = np.mean(val_losses)
                 validation_losses.append(validation_loss)
 
@@ -99,7 +99,7 @@ class DFL():
                 break
 
             for x_batch, y_batch in train_loader:
-                loss = step(x_batch, y_batch, model, loss_fn)
+                loss = self.step(x_batch, y_batch, model, loss_fn)
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -484,7 +484,7 @@ class DFL():
             y_t = g_func(t, x_t, u_t)
             
             if t - t_control_last > dt_control:
-                t_control_last = copy.copy(t) 
+                t_control_last = copy.copy(t)
                 u_t = u_func(g_func(t, x_t, u_t), t)
 
             t_array.append(t)
@@ -614,35 +614,90 @@ class DFL():
         self.X_plus = np.array(X_plus_data)
         self.Eta_plus = np.array(Eta_plus_data)
 
+    # def generate_data_from_file(self, file_name):
+    #     '''
+    #     Load the data with:
+    #     data = np.load(file_name)
+    #     t = data['t']
+    #     x = data['x']
+    #     e = data['e']
+    #     s = data['s']
+    #     u = data['u']
+    #     t: time
+    #     x = [x, y] ,  e=[v_x,v_y,e_x,e_y,m], s= [s,s',s''], u = [u_x,u_y]
+    #     so the three variables in s are the height of the soil at the bucket tip location and the gradients
+    #     The shape of each of those numpy arrays will be (Number of trajectories, time steps, variable)
+    #     m is an estimate of the soil mass being moved by the bucket
+    #     e_ are forces from the soil acting on the bucket
+    #     the thing is those arent realistically measurable
+    #     The simulation software is hybrid in that it converts the parts of its soil mesh which the bucket is moving into particles which it simulates discretely. This is the mass of those particles.
+    #     What I will say is that e_x e_y and m are not easily measureable quantities
+    #     '''
+
+    #     # Set index for testing
+    #     test_ndx = 2 # 1, 7
+
+    #     # Extract data from file
+    #     data = np.load(file_name)
+    #     breakpoint()
+    #     t = data['t']
+    #     x = data['x']
+    #     e = data['e']
+    #     s = data['s']
+    #     u = data['u']
+    #     n_traj = len(t)
+    #     n_t = len(t[0])
+
+    #     # Assemble data into paradigm
+    #     self.      t_data = t
+    #     self.      x_data = np.concatenate((x,e),2)
+    #     self.      u_data = u
+    #     self.    eta_data = s[:,:,:2]
+    #     self.eta_dot_data = s[:,:,1:]
+    #     self.      y_data = np.reshape([self.g_koop_poly(xs,self.n_koop) for traj in self.x_data for xs in traj], (n_traj, n_t, -1))
+
+    #     # Set aside test data
+    #     self.      t_data_test = np.copy(self.      t_data[test_ndx])
+    #     self.      x_data_test = np.copy(self.      x_data[test_ndx])
+    #     self.      u_data_test = np.copy(self.      u_data[test_ndx])
+    #     self.    eta_data_test = np.copy(self.    eta_data[test_ndx])
+    #     self.eta_dot_data_test = np.copy(self.eta_dot_data[test_ndx])
+    #     self.           y_test = np.copy(self.      y_data[test_ndx])
+
+    #     # Remove test data from training data
+    #     self.      t_data = np.delete(self.      t_data,test_ndx,0)
+    #     self.      x_data = np.delete(self.      x_data,test_ndx,0)
+    #     self.      u_data = np.delete(self.      u_data,test_ndx,0)
+    #     self.    eta_data = np.delete(self.    eta_data,test_ndx,0)
+    #     self.eta_dot_data = np.delete(self.eta_dot_data,test_ndx,0)
+    #     self.      y_data = np.delete(self.      y_data,test_ndx,0)
+
+    #     # Inputs
+    #     self.  Y_minus = np.copy(self.  y_data[:, :-1,:])
+    #     self.  U_minus =         self.  u_data[:, :-1,:]
+    #     self.  X_minus =         self.  x_data[:, :-1,:]
+    #     self.Eta_minus =         self.eta_data[:, :-1,:]
+
+    #     # Outputs
+    #     self.  Y_plus  = np.copy(self.  y_data[:,1:  ,:])
+    #     self.  U_plus  =         self.  u_data[:,1:  ,:]
+    #     self.  X_plus  =         self.  x_data[:,1:  ,:]
+    #     self.Eta_plus  =         self.eta_data[:,1:  ,:]
+
     def generate_data_from_file(self, file_name):
         '''
-        Load the data with:
-        data = np.load(file_name)
-        t = data['t']
-        x = data['x']
-        e = data['e']
-        s = data['s']
-        u = data['u']
-        t: time
-        x = [x, y] ,  e=[v_x,v_y,e_x,e_y,m], s= [s,s',s''], u = [u_x,u_y]
-        so the three variables in s are the height of the soil at the bucket tip location and the gradients
-        The shape of each of those numpy arrays will be (Number of trajectories, time steps, variable)
-        m is an estimate of the soil mass being moved by the bucket
-        e_ are forces from the soil acting on the bucket
-        the thing is those arent realistically measurable
-        The simulation software is hybrid in that it converts the parts of its soil mesh which the bucket is moving into particles which it simulates discretely. This is the mass of those particles.
-        What I will say is that e_x e_y and m are not easily measureable quantities
+        x = [x , y, z, v_x, v_y, omega], e = [a_x,a_y,alpha, F_x, F_y, m_soil]
+        u = [u_x,u_y,tau]
         '''
 
         # Set index for testing
-        test_ndx = 2 # 1, 7
+        test_ndx = 50 # 1, 7
 
         # Extract data from file
         data = np.load(file_name)
         t = data['t']
         x = data['x']
         e = data['e']
-        s = data['s']
         u = data['u']
         n_traj = len(t)
         n_t = len(t[0])
@@ -651,8 +706,8 @@ class DFL():
         self.      t_data = t
         self.      x_data = np.concatenate((x,e),2)
         self.      u_data = u
-        self.    eta_data = s[:,:,:2]
-        self.eta_dot_data = s[:,:,1:]
+        self.    eta_data = e
+        self.eta_dot_data = e
         self.      y_data = np.reshape([self.g_koop_poly(xs,self.n_koop) for traj in self.x_data for xs in traj], (n_traj, n_t, -1))
 
         # Set aside test data

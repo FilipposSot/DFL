@@ -26,9 +26,9 @@ class Plant1(DFLDynamicPlant):
     
     def __init__(self):
         
-        self.n_x = 7
+        self.n_x = 12
         self.n_eta = 7
-        self.n_u = 2
+        self.n_u = 3
 
         self.n = self.n_x + self.n_eta
 
@@ -123,17 +123,17 @@ def square_u_func(y,t):
 if __name__== "__main__":
     ################# DFL MODEL TEST ##############################################
     plant1 = Plant1()
-    dfl1 = DFL(plant1, dt_data = 0.02, dt_control = 0.2)
+    dt_data = 0.01
+    dfl1 = DFL(plant1, dt_data = dt_data, dt_control = dt_data)
     driving_fun = square_u_func
-    T = 4.98
 
     # dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
-    dfl1.generate_data_from_file('data.npz')
+    dfl1.generate_data_from_file('data_nick_not_flat.npz')
     dfl1.learn_eta_fn()
     # dfl1.generate_DFL_disc_model()
     dfl1.regress_K_matrix()
 
-    driving_fun = lambda y,t : dfl1.u_data_test[round(t)]
+    driving_fun = lambda y,t : dfl1.u_data_test[round(t/dt_data)]
     x_0 = dfl1.x_data_test[0]
 
     # t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, T)
@@ -141,7 +141,8 @@ if __name__== "__main__":
     u_nonlin = dfl1.u_data_test
     x_nonlin = dfl1.x_data_test
     y_nonlin = dfl1.x_data_test
-    
+    T = dfl1.t_data_test[-1]
+
     # t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, T, continuous = False)
     t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0, driving_fun, T)
     t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, T)
@@ -168,12 +169,19 @@ if __name__== "__main__":
     axs[1].plot(t, y_lrn[:,1],'b-.')
     axs[1].set_ylim(-5,5)
   
-    axs[2].plot(t, u_nonlin,'k')
+    axs[2].plot(y_nonlin[:,0], -y_nonlin[:,1],'k')
+    axs[2].plot(y_koop[:,0], -y_koop[:,1],'g-.')
+    axs[2].plot(y_lrn[:,0], -y_lrn[:,1],'b-.')
+    axs[2].set_xlim(-4.5,1)
+    axs[2].set_ylim(-1.5,1.5)
 
-    axs[2].set_xlabel('time')
+    axs[1].set_xlabel('time')
     
     axs[0].set_ylabel('x')
     axs[1].set_ylabel('y')
-    axs[2].set_ylabel('u')
+    axs[2].set_xlabel('x')
+    axs[2].set_ylabel('y')
+
+    fig.subplots_adjust(hspace=0.5)
 
     plt.show()
