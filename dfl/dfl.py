@@ -37,7 +37,7 @@ np.random.seed(seed = seed)
 torch.autograd.set_detect_anomaly(True)
 
 RETRAIN = True
-RETRAIN = False
+# RETRAIN = False
 
 class DFL():
     def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1, n_koop=15):
@@ -72,7 +72,7 @@ class DFL():
             u_tm1_a   = torch.transpose(u_tm1_a  ,0,1)
             eta_hat_a = torch.transpose(eta_hat_a,0,1)
 
-            corr = sum([torch.dot(u,eta)/torch.norm(u)/torch.norm(eta) for eta in eta_hat_a for u in u_tm1_a])
+            corr = sum([torch.dot(u,eta)**2/torch.norm(u)**2/torch.norm(eta)**2 for eta in eta_hat_a for u in u_tm1_a])
             return loss_fn(x_t, x_hat) + corr
         else:
             eta_t = model.g(x_t)
@@ -128,7 +128,9 @@ class DFL():
             training_loss = np.mean(batch_losses)
             training_losses.append(training_loss)
 
-            print(f"[{t+1}] Training loss: {training_loss:.3f}\t Validation loss: {validation_loss:.3f}")
+            pstr = f"[{t+1}] Training loss: {training_loss:.3f}\t Validation loss: {validation_loss:.3f}"
+
+            print(pstr)
 
         
         plt.figure()
