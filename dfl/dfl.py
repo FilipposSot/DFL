@@ -2,6 +2,7 @@
 import torch
 import torch.optim as optim
 import torch.nn as nn
+# import torch.linalg as linalg
 from torchviz import make_dot
 from torch.utils.data import Dataset, TensorDataset, DataLoader
 from torch.utils.data.dataset import random_split
@@ -33,6 +34,7 @@ device = 'cpu' #'cuda' if torch.cuda.is_available() else 'cpu'
 seed = 9
 torch.manual_seed(seed)
 np.random.seed(seed = seed)
+torch.autograd.set_detect_anomaly(True)
 
 RETRAIN = True
 RETRAIN = False
@@ -52,12 +54,29 @@ class DFL():
 
         x_t = y_batch
 
-        eta_t = model.g(x_t)
-
         x_hat, eta_hat = model(x_batch)
 
-        # Return 
-        return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
+        # Return
+        if self.model.observeU:
+            u_tm1   = x_batch[:,self.plant.n_x:]
+
+            u_tm1_a = u_tm1.clone()
+            eta_hat_a = eta_hat.clone()
+
+            for t in range(len(u_tm1)):
+                # breakpoint()
+                u_tm1_a[t] = u_tm1_a  [t].clone()-torch.mean(u_tm1_a  [t]).item()
+                eta_hat_a[t] = eta_hat_a[t].clone()-torch.mean(eta_hat_a[t]).item()
+                # breakpoint()
+
+            u_tm1_a   = torch.transpose(u_tm1_a  ,0,1)
+            eta_hat_a = torch.transpose(eta_hat_a,0,1)
+
+            corr = sum([torch.dot(u,eta)/torch.norm(u)/torch.norm(eta) for eta in eta_hat_a for u in u_tm1_a])
+            return loss_fn(x_t, x_hat) + corr
+        else:
+            eta_t = model.g(x_t)
+            return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
 
     def train_model(self, model, x, y, title=None):
         # Reshape x and y to be vector of tensors
@@ -130,7 +149,7 @@ class DFL():
         u_minus = torch.transpose(torch.from_numpy(self.U_minus.reshape(-1, self.U_minus.shape[-1])).type(dtype), 0,1)
         x_plus  = torch.transpose(torch.from_numpy(self.X_plus .reshape(-1, self.X_plus .shape[-1])).type(dtype), 0,1)
 
-        self.model = LearnedDFL(self.plant.n_x, self.plant.n_eta, self.plant.n_u, 256, False)
+        self.model = LearnedDFL(self.plant.n_x, self.plant.n_eta, self.plant.n_u, 256, True)
 
         if RETRAIN:
             self.model = self.train_model(self.model, torch.cat((x_minus, u_minus), 0), x_plus)
@@ -145,7 +164,12 @@ class DFL():
                 x = x.reshape(-1, x.shape[-1])
                 u = u.reshape(-1, u.shape[-1])
 
-            inp = torch.from_numpy(x).type(dtype)
+            if self.model.observeU:
+                x = torch.from_numpy(x).type(dtype)
+                u = torch.from_numpy(u).type(dtype)
+                inp = torch.cat((x,u),0)
+            else:
+                inp = torch.from_numpy(x).type(dtype)
 
             eta = self.model.g(inp).detach().numpy().T
 
@@ -765,7 +789,7 @@ class DFL():
         return t, u, xi, y
 
     def simulate_system_learned(self, x_0, u_func, t_f):
-        u_minus = np.zeros((self.plant.n_u,1))
+        u_minus = np.zeros(self.plant.n_u)
         eta_0 = self.eta_fn(x_0, u_minus)
         xi_0 = np.concatenate((x_0, eta_0))
 
