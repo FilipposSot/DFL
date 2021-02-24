@@ -5,15 +5,14 @@ from torch.utils.data.dataset import random_split
 from torch.autograd import Variable
 
 class LearnedDFL(torch.nn.Module):
-    def __init__(self, D_x, D_eta, D_u, H, observeU=False):
+    def __init__(self, D_x, D_eta, D_u, H):
         super(LearnedDFL, self).__init__()
 
-        self.observeU = observeU
         self.D_x = D_x
         D_xi = D_x + D_eta + D_u
 
         self.g = torch.nn.Sequential(
-            torch.nn.Linear(D_x+D_u*observeU,H),
+            torch.nn.Linear(D_x,H),
             torch.nn.ReLU(),
             torch.nn.ReLU(),
             torch.nn.ReLU(),
@@ -27,7 +26,7 @@ class LearnedDFL(torch.nn.Module):
         x_tm1 = x_star[:,:self.D_x]
         u_tm1 = x_star[:,self.D_x:]
 
-        eta_tm1 = self.g(x_star) if self.observeU else self.g(x_tm1)
+        eta_tm1 = self.g(x_tm1)
 
         xi_tm1 = torch.cat((x_tm1,eta_tm1,u_tm1), 1)
 

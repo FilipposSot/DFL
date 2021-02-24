@@ -26,7 +26,8 @@ class Plant1(DFLDynamicPlant):
     
     def __init__(self):
         
-        self.n_x = 12
+        self.n_x = 6
+        self.n_zeta = 6
         self.n_eta = 7
         self.n_u = 3
 
@@ -135,16 +136,17 @@ if __name__== "__main__":
 
     driving_fun = lambda y,t : dfl1.u_data_test[round(t/dt_data)]
     x_0 = dfl1.x_data_test[0]
+    x_0_aug = np.concatenate((x_0,dfl1.zetas_data_test[0]),0)
 
     # t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, T)
     t = dfl1.t_data_test
     u_nonlin = dfl1.u_data_test
     x_nonlin = dfl1.x_data_test
-    y_nonlin = dfl1.x_data_test
+    y_nonlin = dfl1.y_data_test
     T = dfl1.t_data_test[-1]
-
+    # breakpoint()
     # t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, T, continuous = False)
-    t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0, driving_fun, T)
+    t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0_aug, driving_fun, T)
     t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, T)
 
     # sse_dfl = np.sum(np.abs(y_nonlin[:,0]-y_dfl[:,0]))
@@ -167,13 +169,13 @@ if __name__== "__main__":
     axs[1].plot(t, y_koop[:,1] ,'g-.')
     # axs[1].plot(t, y_dfl[:,1],'r-.')
     axs[1].plot(t, y_lrn[:,1],'b-.')
-    axs[1].set_ylim(-5,5)
+    axs[1].set_ylim(-2,0.5)
   
-    axs[2].plot(y_nonlin[:,0], -y_nonlin[:,1],'k')
-    axs[2].plot(y_koop[:,0], -y_koop[:,1],'g-.')
-    axs[2].plot(y_lrn[:,0], -y_lrn[:,1],'b-.')
-    axs[2].set_xlim(-4.5,1)
-    axs[2].set_ylim(-1.5,1.5)
+    axs[2].plot(y_nonlin[:,0], y_nonlin[:,1],'k')
+    axs[2].plot(y_koop[:,0], y_koop[:,1],'g-.')
+    axs[2].plot(y_lrn[:,0], y_lrn[:,1],'b-.')
+    axs[2].set_xlim(-3.5,1.8)
+    axs[2].set_ylim(-2,0.5)
 
     axs[1].set_xlabel('time')
     
@@ -183,5 +185,5 @@ if __name__== "__main__":
     axs[2].set_ylabel('y')
 
     fig.subplots_adjust(hspace=0.5)
-
+    fig.savefig('results.eps')
     plt.show()

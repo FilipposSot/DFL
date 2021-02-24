@@ -31,16 +31,17 @@ np.set_printoptions(suppress = True)
 H = 256
 dtype = torch.FloatTensor
 device = 'cpu' #'cuda' if torch.cuda.is_available() else 'cpu'
-seed = 9
+seed = 9#9,6
 torch.manual_seed(seed)
 np.random.seed(seed = seed)
-torch.autograd.set_detect_anomaly(True)
+# torch.autograd.set_detect_anomaly(True)
+torch.set_num_threads(10)
 
 RETRAIN = True
-# RETRAIN = False
+RETRAIN = False
 
 class DFL():
-    def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1, n_koop=15):
+    def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1, n_koop=64):
         
         self.plant = dynamic_plant
         self.dt_data = dt_data 
@@ -55,28 +56,11 @@ class DFL():
         x_t = y_batch
 
         x_hat, eta_hat = model(x_batch)
+        
+        eta_t = model.g(x_t)
 
         # Return
-        if self.model.observeU:
-            u_tm1   = x_batch[:,self.plant.n_x:]
-
-            u_tm1_a = u_tm1.clone()
-            eta_hat_a = eta_hat.clone()
-
-            for t in range(len(u_tm1)):
-                # breakpoint()
-                u_tm1_a[t] = u_tm1_a  [t].clone()-torch.mean(u_tm1_a  [t]).item()
-                eta_hat_a[t] = eta_hat_a[t].clone()-torch.mean(eta_hat_a[t]).item()
-                # breakpoint()
-
-            u_tm1_a   = torch.transpose(u_tm1_a  ,0,1)
-            eta_hat_a = torch.transpose(eta_hat_a,0,1)
-
-            corr = sum([torch.dot(u,eta)**2/torch.norm(u)**2/torch.norm(eta)**2 for eta in eta_hat_a for u in u_tm1_a])
-            return loss_fn(x_t, x_hat) + corr
-        else:
-            eta_t = model.g(x_t)
-            return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
+        return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
 
     def train_model(self, model, x, y, title=None):
         # Reshape x and y to be vector of tensors
@@ -97,7 +81,7 @@ class DFL():
         # the model for us. Here we will use Adam; the optim package contains many other
         # optimization algorithms. The first argument to the Adam constructor tells the
         # optimizer which Tensors it should update.
-        learning_rate = .0001
+        learning_rate = .00001
         n_epochs = 100000
         training_losses = []
         validation_losses = []
@@ -114,7 +98,7 @@ class DFL():
                 validation_loss = np.mean(val_losses)
                 validation_losses.append(validation_loss)
 
-            if t>100 and np.mean(validation_losses[-20:-11])<=np.mean(validation_losses[-10:-1]):
+            if t>50 and np.mean(validation_losses[-20:-11])<=np.mean(validation_losses[-10:-1]):
                 break
 
             for x_batch, y_batch in train_loader:
@@ -147,11 +131,16 @@ class DFL():
         return model
 
     def learn_eta_fn(self):
-        x_minus = torch.transpose(torch.from_numpy(self.X_minus.reshape(-1, self.X_minus.shape[-1])).type(dtype), 0,1)
-        u_minus = torch.transpose(torch.from_numpy(self.U_minus.reshape(-1, self.U_minus.shape[-1])).type(dtype), 0,1)
-        x_plus  = torch.transpose(torch.from_numpy(self.X_plus .reshape(-1, self.X_plus .shape[-1])).type(dtype), 0,1)
+        x_minus = torch.transpose(torch.from_numpy(self.    X_minus.reshape(-1, self.    X_minus.shape[-1])).type(dtype), 0,1)
+        z_minus = torch.transpose(torch.from_numpy(self.Zetas_minus.reshape(-1, self.Zetas_minus.shape[-1])).type(dtype), 0,1)
+        u_minus = torch.transpose(torch.from_numpy(self.    U_minus.reshape(-1, self.    U_minus.shape[-1])).type(dtype), 0,1)
+        x_plus  = torch.transpose(torch.from_numpy(self.    X_plus .reshape(-1, self.    X_plus .shape[-1])).type(dtype), 0,1)
+        z_plus  = torch.transpose(torch.from_numpy(self.Zetas_plus .reshape(-1, self.Zetas_plus .shape[-1])).type(dtype), 0,1)
 
-        self.model = LearnedDFL(self.plant.n_x, self.plant.n_eta, self.plant.n_u, 256, True)
+        x_minus = torch.cat((x_minus,z_minus),0)
+        x_plus  = torch.cat((x_plus ,z_plus ),0)
+
+        self.model = LearnedDFL(self.plant.n_x+self.plant.n_zeta, self.plant.n_eta, self.plant.n_u, 256)
 
         if RETRAIN:
             self.model = self.train_model(self.model, torch.cat((x_minus, u_minus), 0), x_plus)
@@ -166,29 +155,13 @@ class DFL():
                 x = x.reshape(-1, x.shape[-1])
                 u = u.reshape(-1, u.shape[-1])
 
-            if self.model.observeU:
-                x = torch.from_numpy(x).type(dtype)
-                u = torch.from_numpy(u).type(dtype)
-                inp = torch.cat((x,u),0)
-            else:
-                inp = torch.from_numpy(x).type(dtype)
+            inp = torch.from_numpy(x).type(dtype)
 
             eta = self.model.g(inp).detach().numpy().T
 
             return eta
 
         self.eta_fn = eta_fn
-
-    def regen_eta(self):
-        self.EtaL_minus = self.eta_fn(self.X_minus, self.U_minus)
-        self.EtaL_plus  = self.eta_fn(self.X_plus , self.U_plus )
-
-    def lstsqAH(self):
-        x_t   = torch.from_numpy(self.X_plus .reshape(-1, self.X_plus .shape[-1])).type(dtype)
-        x_tm1 = torch.from_numpy(self.X_minus.reshape(-1, self.X_minus.shape[-1])).type(dtype)
-        u_tm1 = torch.from_numpy(self.U_minus.reshape(-1, self.U_minus.shape[-1])).type(dtype)
-
-        self.model.lstsqAH(x_t, x_tm1, u_tm1)
 
     def regress_H_cont_matrix(self):
         '''
@@ -530,7 +503,6 @@ class DFL():
         u_data = []
         eta_data = []
         eta_dot_data = []
-
         
         X_minus_data = []
         U_minus_data = []
@@ -640,6 +612,72 @@ class DFL():
         self.X_plus = np.array(X_plus_data)
         self.Eta_plus = np.array(Eta_plus_data)
 
+    def generate_data_from_file(self, file_name):
+        '''
+        x = [x , y, z, v_x, v_y, omega], e = [a_x,a_y,alpha, F_x, F_y, m_soil]
+        u = [u_x,u_y,tau]
+        '''
+
+        # Set index for testing
+        test_ndx = 4 #50,3
+
+        # Extract data from file
+        data = np.load(file_name)
+        t = data['t']
+        x = data['x']
+        e = data['e']
+        u = data['u']
+        n_traj = len(t)
+        n_t = len(t[0])
+
+        # Filter input from zeta
+        zeta_lstsq = e.reshape(-1, e.shape[-1]).T
+        u_lstsq = u.reshape(-1, u.shape[-1]).T
+        D = np.linalg.lstsq(np.matmul(u_lstsq,u_lstsq.T),np.matmul(u_lstsq,zeta_lstsq.T),rcond=None)[0].T
+        zeta_star = zeta_lstsq-np.matmul(D,u_lstsq)
+        zeta_star = zeta_star.reshape(e.shape)
+
+        # Assemble data into paradigm
+        self.      t_data = t
+        self.      x_data = x
+        self.      u_data = u
+        self.    eta_data = e
+        self.eta_dot_data = e
+        self.  zetas_data = zeta_star
+        self.      y_data = np.reshape([self.g_koop_poly(xs,self.n_koop) for traj in self.x_data for xs in traj], (n_traj, n_t, -1))
+
+        # Set aside test data
+        self.      t_data_test = np.copy(self.      t_data[test_ndx])
+        self.      x_data_test = np.copy(self.      x_data[test_ndx])
+        self.      u_data_test = np.copy(self.      u_data[test_ndx])
+        self.    eta_data_test = np.copy(self.    eta_data[test_ndx])
+        self.eta_dot_data_test = np.copy(self.eta_dot_data[test_ndx])
+        self.  zetas_data_test = np.copy(self.  zetas_data[test_ndx])
+        self.      y_data_test = np.copy(self.      y_data[test_ndx])
+
+        # Remove test data from training data
+        self.      t_data = np.delete(self.      t_data,test_ndx,0)
+        self.      x_data = np.delete(self.      x_data,test_ndx,0)
+        self.      u_data = np.delete(self.      u_data,test_ndx,0)
+        self.    eta_data = np.delete(self.    eta_data,test_ndx,0)
+        self.eta_dot_data = np.delete(self.eta_dot_data,test_ndx,0)
+        self.  zetas_data = np.delete(self.  zetas_data,test_ndx,0)
+        self.      y_data = np.delete(self.      y_data,test_ndx,0)
+
+        # Inputs
+        self.    Y_minus = np.copy(self.    y_data[:, :-1,:])
+        self.    U_minus =         self.    u_data[:, :-1,:]
+        self.    X_minus =         self.    x_data[:, :-1,:]
+        self.  Eta_minus =         self.  eta_data[:, :-1,:]
+        self.Zetas_minus =         self.zetas_data[:, :-1,:]
+
+        # Outputs
+        self.    Y_plus  = np.copy(self.    y_data[:,1:  ,:])
+        self.    U_plus  =         self.    u_data[:,1:  ,:]
+        self.    X_plus  =         self.    x_data[:,1:  ,:]
+        self.  Eta_plus  =         self.  eta_data[:,1:  ,:]
+        self.Zetas_plus  =         self.zetas_data[:,1:  ,:]
+
     # def generate_data_from_file(self, file_name):
     #     '''
     #     Load the data with:
@@ -709,60 +747,6 @@ class DFL():
     #     self.  U_plus  =         self.  u_data[:,1:  ,:]
     #     self.  X_plus  =         self.  x_data[:,1:  ,:]
     #     self.Eta_plus  =         self.eta_data[:,1:  ,:]
-
-    def generate_data_from_file(self, file_name):
-        '''
-        x = [x , y, z, v_x, v_y, omega], e = [a_x,a_y,alpha, F_x, F_y, m_soil]
-        u = [u_x,u_y,tau]
-        '''
-
-        # Set index for testing
-        test_ndx = 50 # 1, 7
-
-        # Extract data from file
-        data = np.load(file_name)
-        t = data['t']
-        x = data['x']
-        e = data['e']
-        u = data['u']
-        n_traj = len(t)
-        n_t = len(t[0])
-
-        # Assemble data into paradigm
-        self.      t_data = t
-        self.      x_data = np.concatenate((x,e),2)
-        self.      u_data = u
-        self.    eta_data = e
-        self.eta_dot_data = e
-        self.      y_data = np.reshape([self.g_koop_poly(xs,self.n_koop) for traj in self.x_data for xs in traj], (n_traj, n_t, -1))
-
-        # Set aside test data
-        self.      t_data_test = np.copy(self.      t_data[test_ndx])
-        self.      x_data_test = np.copy(self.      x_data[test_ndx])
-        self.      u_data_test = np.copy(self.      u_data[test_ndx])
-        self.    eta_data_test = np.copy(self.    eta_data[test_ndx])
-        self.eta_dot_data_test = np.copy(self.eta_dot_data[test_ndx])
-        self.           y_test = np.copy(self.      y_data[test_ndx])
-
-        # Remove test data from training data
-        self.      t_data = np.delete(self.      t_data,test_ndx,0)
-        self.      x_data = np.delete(self.      x_data,test_ndx,0)
-        self.      u_data = np.delete(self.      u_data,test_ndx,0)
-        self.    eta_data = np.delete(self.    eta_data,test_ndx,0)
-        self.eta_dot_data = np.delete(self.eta_dot_data,test_ndx,0)
-        self.      y_data = np.delete(self.      y_data,test_ndx,0)
-
-        # Inputs
-        self.  Y_minus = np.copy(self.  y_data[:, :-1,:])
-        self.  U_minus =         self.  u_data[:, :-1,:]
-        self.  X_minus =         self.  x_data[:, :-1,:]
-        self.Eta_minus =         self.eta_data[:, :-1,:]
-
-        # Outputs
-        self.  Y_plus  = np.copy(self.  y_data[:,1:  ,:])
-        self.  U_plus  =         self.  u_data[:,1:  ,:]
-        self.  X_plus  =         self.  x_data[:,1:  ,:]
-        self.Eta_plus  =         self.eta_data[:,1:  ,:]
 
     def simulate_system_nonlinear(self, x_0, u_func, t_f):
 
