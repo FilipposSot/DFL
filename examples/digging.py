@@ -14,6 +14,7 @@ from torch.utils.data.dataset import random_split
 from torch.autograd import Variable
 
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from scipy import signal
 
@@ -149,20 +150,21 @@ if __name__== "__main__":
     t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0_aug, driving_fun, T)
     t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, T)
 
-    # sse_dfl = np.sum(np.abs(y_nonlin[:,0]-y_dfl[:,0]))
-    # sse_kop = np.sum(np.abs(y_nonlin[:,0]-y_koop[:,0]))
-    # sse_lrn = np.sum(np.abs(y_nonlin[:,0]-y_lrn[:,0]))
-    # # print(sse_dfl)
-    # print(sse_kop)
-    # print(sse_lrn)
-    
+    sse_kop = np.sum((x_nonlin-x_koop[:,:6])**2)
+    sse_lrn = np.sum((x_nonlin-x_lrn [:,:6])**2)
+    print(sse_kop)
+    print(sse_lrn)
+
+    breakpoint()
+
+    matplotlib.rcParams.update({'font.size': 22})
     fig, axs = plt.subplots(3, 1)
 
     axs[0].plot(t, y_nonlin[:,0], 'k', label='True')
     axs[0].plot(t, y_koop[:,0] ,'g-.', label='Koopman')
     # axs[0].plot(t, y_dfl[:,0] ,'r-.', label='DFL')
     axs[0].plot(t, y_lrn[:,0] ,'b-.', label='L3')
-    axs[0].legend()
+    axs[0].legend(ncol=3,bbox_to_anchor=(0, 1, 1, 0))
     axs[0].set_ylim(-5,5)
 
     axs[1].plot(t, y_nonlin[:,1],'k')
@@ -185,5 +187,5 @@ if __name__== "__main__":
     axs[2].set_ylabel('y')
 
     fig.subplots_adjust(hspace=0.5)
-    fig.savefig('results.eps')
+
     plt.show()

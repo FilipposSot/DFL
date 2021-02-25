@@ -29,6 +29,7 @@ class Plant1(DFLDynamicPlant):
         self.n_x = 2
         self.n_eta = 2
         self.n_u = 1
+        self.n_zeta = 2
 
         self.n = self.n_x + self.n_eta
 
@@ -90,8 +91,7 @@ class Plant1(DFLDynamicPlant):
         y = np.array([q,v,q**2,q**3,q**4,q**5,q**6,q**7,
                       v**2,v**3,v**4,v**5,v**6,v**7,v**9,v**11,v**13,v**15,v**17,v**19,
                       v*q,v*q**2,v*q**3,v*q**4,v*q**5,
-                      v**2*q,v**2*q**2,v**2*q**3,v**2*q**4,v**2
-                      *q**5,
+                      v**2*q,v**2*q**2,v**2*q**3,v**2*q**4,v**2*q**5,
                       v**3*q,v**3*q**2,v**3*q**3,v**3*q**4,v**3*q**5])
         return y 
 
@@ -128,22 +128,24 @@ if __name__== "__main__":
     ################# DFL MODEL TEST ##############################################
     plant1 = Plant1()
     dfl1 = DFL(plant1, dt_data = 0.05, dt_control = 0.2)
-    setattr(plant1, "g", Plant1.gkoop2)
+    setattr(plant1, "g", lambda t,x,u : dfl1.g_koop_poly(x,dfl1.n_koop))
     driving_fun = square_u_func
     T = 11.0
 
     dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
     dfl1.learn_eta_fn()
+    # dfl1.redef_eta_fn()
     dfl1.generate_DFL_disc_model()
     dfl1.regress_K_matrix()
 
     x_0 = np.array([0,0])
+    x_0_aug = np.array([0,0,0,0])
 
     t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, T)
     
     t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, T, continuous = False)
     t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, T)
-    t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0, driving_fun, T)
+    t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0_aug, driving_fun, T)
 
     sse_dfl = np.sum(np.abs(y_nonlin[:,0]-y_dfl[:,0]))
     sse_kop = np.sum(np.abs(y_nonlin[:,0]-y_koop[:,0]))

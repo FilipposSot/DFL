@@ -34,19 +34,3 @@ class LearnedDFL(torch.nn.Module):
         eta_t = self.H(xi_tm1)
 
         return x_t, eta_t
-
-    # def lstsqAH(self, x_t, x_tm1, u_tm1):
-    #     eta_tm1 = self.g(x_tm1)
-
-    #     xi_tm1 = torch.cat((x_tm1,eta_tm1,u_tm1), 1)
-
-    #     eta_t = self.g(x_t)
-
-    #     A = torch.lstsq(  x_t,xi_tm1).solution[:5]
-    #     H = torch.lstsq(eta_t,xi_tm1).solution[:5]
-
-    #     for i in range(len(A)):
-    #         for j in range(len(A[0])):
-    #             self.A.weight[j,i] = A[i,j].item()
-    #         for j in range(len(H[0])):
-    #             self.H.weight[j,i] = H[i,j].item()

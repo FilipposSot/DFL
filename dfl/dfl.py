@@ -41,7 +41,7 @@ RETRAIN = True
 RETRAIN = False
 
 class DFL():
-    def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1, n_koop=64):
+    def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1, n_koop=32):
         
         self.plant = dynamic_plant
         self.dt_data = dt_data 
@@ -155,6 +155,24 @@ class DFL():
                 x = x.reshape(-1, x.shape[-1])
                 u = u.reshape(-1, u.shape[-1])
 
+            inp = torch.from_numpy(x).type(dtype)
+
+            eta = self.model.g(inp).detach().numpy().T
+
+            return eta
+
+        self.eta_fn = eta_fn
+
+    def redef_eta_fn(self):
+        def eta_fn(x, u):
+            x_shape = x.shape
+            u_shape = u.shape
+            if len(x_shape)==3:
+                x = x.reshape(-1, x.shape[-1])
+                u = u.reshape(-1, u.shape[-1])
+
+            x = np.concatenate((x,np.zeros((2))),0)
+            
             inp = torch.from_numpy(x).type(dtype)
 
             eta = self.model.g(inp).detach().numpy().T
@@ -596,21 +614,31 @@ class DFL():
             eta_data.append(eta_array)
             eta_dot_data.append(eta_dot_array2)
         
-        self.t_data = np.array(t_data) 
-        self.x_data = np.array(x_data)
-        self.u_data = np.array(u_data)
-        self.eta_data = np.array(eta_data)
+        self.      t_data = np.array(      t_data) 
+        self.      x_data = np.array(      x_data)
+        self.      u_data = np.array(      u_data)
+        self.    eta_data = np.array(    eta_data)
         self.eta_dot_data = np.array(eta_dot_data)
 
-        self.Y_minus = np.array(Y_minus_data)
-        self.U_minus = np.array(U_minus_data)
-        self.X_minus = np.array(X_minus_data)
-        self.Eta_minus = np.array(Eta_minus_data)
+        e = self.eta_data
+        zeta_lstsq = e.reshape(-1, e.shape[-1]).T
+        u_lstsq = self.u_data.reshape(-1, self.u_data.shape[-1]).T
+        D = np.linalg.lstsq(np.matmul(u_lstsq,u_lstsq.T),np.matmul(u_lstsq,zeta_lstsq.T),rcond=None)[0].T
+        zeta_star = zeta_lstsq-np.matmul(D,u_lstsq)
+        zeta_star = zeta_star.reshape(e.shape)
+        self.zetas_data = np.zeros(self.eta_data.shape)#zeta_star
 
-        self.Y_plus = np.array(Y_plus_data)
-        self.U_plus = np.array(U_plus_data)
-        self.X_plus = np.array(X_plus_data)
-        self.Eta_plus = np.array(Eta_plus_data)
+        self.    Y_minus = np.array(  Y_minus_data)
+        self.    U_minus = np.array(  U_minus_data)
+        self.    X_minus = np.array(  X_minus_data)
+        self.  Eta_minus = np.array(Eta_minus_data)
+        self.Zetas_minus = np.zeros(self.Eta_minus.shape)#self.zetas_data[:, :-1,:]
+
+        self.    Y_plus  = np.array(   Y_plus_data)
+        self.    U_plus  = np.array(   U_plus_data)
+        self.    X_plus  = np.array(   X_plus_data)
+        self.  Eta_plus  = np.array( Eta_plus_data)
+        self.Zetas_plus  = np.zeros(self.Eta_plus.shape)#self.zetas_data[:,1:  ,:]
 
     def generate_data_from_file(self, file_name):
         '''
@@ -677,76 +705,6 @@ class DFL():
         self.    X_plus  =         self.    x_data[:,1:  ,:]
         self.  Eta_plus  =         self.  eta_data[:,1:  ,:]
         self.Zetas_plus  =         self.zetas_data[:,1:  ,:]
-
-    # def generate_data_from_file(self, file_name):
-    #     '''
-    #     Load the data with:
-    #     data = np.load(file_name)
-    #     t = data['t']
-    #     x = data['x']
-    #     e = data['e']
-    #     s = data['s']
-    #     u = data['u']
-    #     t: time
-    #     x = [x, y] ,  e=[v_x,v_y,e_x,e_y,m], s= [s,s',s''], u = [u_x,u_y]
-    #     so the three variables in s are the height of the soil at the bucket tip location and the gradients
-    #     The shape of each of those numpy arrays will be (Number of trajectories, time steps, variable)
-    #     m is an estimate of the soil mass being moved by the bucket
-    #     e_ are forces from the soil acting on the bucket
-    #     the thing is those arent realistically measurable
-    #     The simulation software is hybrid in that it converts the parts of its soil mesh which the bucket is moving into particles which it simulates discretely. This is the mass of those particles.
-    #     What I will say is that e_x e_y and m are not easily measureable quantities
-    #     '''
-
-    #     # Set index for testing
-    #     test_ndx = 2 # 1, 7
-
-    #     # Extract data from file
-    #     data = np.load(file_name)
-    #     breakpoint()
-    #     t = data['t']
-    #     x = data['x']
-    #     e = data['e']
-    #     s = data['s']
-    #     u = data['u']
-    #     n_traj = len(t)
-    #     n_t = len(t[0])
-
-    #     # Assemble data into paradigm
-    #     self.      t_data = t
-    #     self.      x_data = np.concatenate((x,e),2)
-    #     self.      u_data = u
-    #     self.    eta_data = s[:,:,:2]
-    #     self.eta_dot_data = s[:,:,1:]
-    #     self.      y_data = np.reshape([self.g_koop_poly(xs,self.n_koop) for traj in self.x_data for xs in traj], (n_traj, n_t, -1))
-
-    #     # Set aside test data
-    #     self.      t_data_test = np.copy(self.      t_data[test_ndx])
-    #     self.      x_data_test = np.copy(self.      x_data[test_ndx])
-    #     self.      u_data_test = np.copy(self.      u_data[test_ndx])
-    #     self.    eta_data_test = np.copy(self.    eta_data[test_ndx])
-    #     self.eta_dot_data_test = np.copy(self.eta_dot_data[test_ndx])
-    #     self.           y_test = np.copy(self.      y_data[test_ndx])
-
-    #     # Remove test data from training data
-    #     self.      t_data = np.delete(self.      t_data,test_ndx,0)
-    #     self.      x_data = np.delete(self.      x_data,test_ndx,0)
-    #     self.      u_data = np.delete(self.      u_data,test_ndx,0)
-    #     self.    eta_data = np.delete(self.    eta_data,test_ndx,0)
-    #     self.eta_dot_data = np.delete(self.eta_dot_data,test_ndx,0)
-    #     self.      y_data = np.delete(self.      y_data,test_ndx,0)
-
-    #     # Inputs
-    #     self.  Y_minus = np.copy(self.  y_data[:, :-1,:])
-    #     self.  U_minus =         self.  u_data[:, :-1,:]
-    #     self.  X_minus =         self.  x_data[:, :-1,:]
-    #     self.Eta_minus =         self.eta_data[:, :-1,:]
-
-    #     # Outputs
-    #     self.  Y_plus  = np.copy(self.  y_data[:,1:  ,:])
-    #     self.  U_plus  =         self.  u_data[:,1:  ,:]
-    #     self.  X_plus  =         self.  x_data[:,1:  ,:]
-    #     self.Eta_plus  =         self.eta_data[:,1:  ,:]
 
     def simulate_system_nonlinear(self, x_0, u_func, t_f):
 
