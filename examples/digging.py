@@ -16,6 +16,9 @@ from torch.autograd import Variable
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
+
 from scipy import signal
 
 m = 1.0
@@ -155,9 +158,9 @@ if __name__== "__main__":
     print(sse_kop)
     print(sse_lrn)
 
-    breakpoint()
-
-    matplotlib.rcParams.update({'font.size': 22})
+    matplotlib.rcParams.update({'font.size': 18})
+    plt.rcParams["font.family"] = "serif"
+    plt.rcParams["font.serif"] = "Times New Roman"
     fig, axs = plt.subplots(3, 1)
 
     axs[0].plot(t, y_nonlin[:,0], 'k', label='True')
@@ -166,6 +169,7 @@ if __name__== "__main__":
     axs[0].plot(t, y_lrn[:,0] ,'b-.', label='L3')
     axs[0].legend(ncol=3,bbox_to_anchor=(0, 1, 1, 0))
     axs[0].set_ylim(-5,5)
+    # axs[0].tick_params(labelbottom = False, bottom = False)
 
     axs[1].plot(t, y_nonlin[:,1],'k')
     axs[1].plot(t, y_koop[:,1] ,'g-.')
