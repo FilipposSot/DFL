@@ -664,6 +664,7 @@ class DFL():
         D = np.linalg.lstsq(np.matmul(u_lstsq,u_lstsq.T),np.matmul(u_lstsq,zeta_lstsq.T),rcond=None)[0].T
         zeta_star = zeta_lstsq-np.matmul(D,u_lstsq)
         zeta_star = zeta_star.reshape(e.shape)
+        # zeta_star = e
 
         # Assemble data into paradigm
         self.      t_data = t
