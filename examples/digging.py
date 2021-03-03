@@ -166,8 +166,10 @@ if __name__== "__main__":
 
     sse_kop = np.sum((x_nonlin-x_koop[:,:6])**2)
     sse_lrn = np.sum((x_nonlin-x_lrn [:,:6])**2)
+    sse_nf  = np.sum((x_nonlin-y_nf  [:,:6])**2)
     print(sse_kop)
     print(sse_lrn)
+    print(sse_nf)
 
     matplotlib.rcParams.update({'font.size': 18})
     plt.rcParams["font.family"] = "serif"
