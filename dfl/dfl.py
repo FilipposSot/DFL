@@ -38,7 +38,7 @@ np.random.seed(seed = seed)
 torch.set_num_threads(10)
 
 RETRAIN = True
-RETRAIN = False
+# RETRAIN = False
 
 class DFL():
     def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.1, n_koop=32):
