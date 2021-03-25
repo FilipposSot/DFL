@@ -14,9 +14,10 @@ class LearnedDFL(torch.nn.Module):
         self.g = torch.nn.Sequential(
             torch.nn.Linear(D_x,H),
             torch.nn.ReLU(),
+            torch.nn.Linear(H,H),
             torch.nn.ReLU(),
+            torch.nn.Linear(H,D_eta),
             torch.nn.ReLU(),
-            torch.nn.Linear(H,D_eta)
         )
 
         self.A = torch.nn.Linear(D_xi,D_x)
