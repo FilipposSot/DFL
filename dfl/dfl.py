@@ -23,7 +23,7 @@ import copy
 
 import matplotlib.pyplot as plt
 
-from dfl.LearnedDFL import LearnedDFL
+from dfl.ILDFL import ILDFL
 
 np.set_printoptions(precision = 4)
 np.set_printoptions(suppress = True)
@@ -56,12 +56,12 @@ class DFL():
 
         x_t = y_batch
 
-        x_hat, eta_hat = model(x_batch)
+        eta_hat = model(x_batch)
         
-        eta_t = model.g(x_t)
+        x_hat = model.inv(eta_hat)
 
         # Return
-        return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
+        return loss_fn(x_t, x_hat)
 
     def train_model(self, model, x, y, title=None):
         # Reshape x and y to be vector of tensors
@@ -132,17 +132,21 @@ class DFL():
         return model
 
     def learn_eta_fn(self):
+        # NICK HACK XXX: This only works if we have anticausal zeta. Please implement a general class.
+        # x_minus = torch.transpose(torch.from_numpy(self.    X_minus.reshape(-1, self.    X_minus.shape[-1])).type(dtype), 0,1)
+        # z_minus = torch.transpose(torch.from_numpy(self.Zetas_minus.reshape(-1, self.Zetas_minus.shape[-1])).type(dtype), 0,1)
+        # u_minus = torch.transpose(torch.from_numpy(self.    U_minus.reshape(-1, self.    U_minus.shape[-1])).type(dtype), 0,1)
+        # x_plus  = torch.transpose(torch.from_numpy(self.    X_plus .reshape(-1, self.    X_plus .shape[-1])).type(dtype), 0,1)
+        # z_plus  = torch.transpose(torch.from_numpy(self.Zetas_plus .reshape(-1, self.Zetas_plus .shape[-1])).type(dtype), 0,1)
+
+        # x_minus = torch.cat((x_minus,z_minus),0)
+        # x_plus  = torch.cat((x_plus ,z_plus ),0)
+
         x_minus = torch.transpose(torch.from_numpy(self.    X_minus.reshape(-1, self.    X_minus.shape[-1])).type(dtype), 0,1)
-        z_minus = torch.transpose(torch.from_numpy(self.Zetas_minus.reshape(-1, self.Zetas_minus.shape[-1])).type(dtype), 0,1)
         u_minus = torch.transpose(torch.from_numpy(self.    U_minus.reshape(-1, self.    U_minus.shape[-1])).type(dtype), 0,1)
         x_plus  = torch.transpose(torch.from_numpy(self.    X_plus .reshape(-1, self.    X_plus .shape[-1])).type(dtype), 0,1)
-        z_plus  = torch.transpose(torch.from_numpy(self.Zetas_plus .reshape(-1, self.Zetas_plus .shape[-1])).type(dtype), 0,1)
 
-        x_minus = torch.cat((x_minus,z_minus),0)
-        x_plus  = torch.cat((x_plus ,z_plus ),0)
-
-        self.model = LearnedDFL(self.plant.n_x+self.plant.n_zeta, self.plant.n_eta, self.plant.n_u, 256)
-
+        self.model = ILDFL(self.plant.n_x+self.plant.n_zeta, self.plant.n_eta, self.plant.n_u, 256)
         if RETRAIN:
             self.model = self.train_model(self.model, torch.cat((x_minus, u_minus), 0), x_plus)
             torch.save(self.model.state_dict(), 'model.pt')
@@ -286,19 +290,19 @@ class DFL():
                                                  window_length = 5, polyorder = 3,
                                                  deriv = 1, axis=0)/self.dt_data
 
-    def generate_sid_model(self,xi_order):
+    # def generate_sid_model(self,xi_order):
 
-        U = self.U_minus.reshape(-1, self.U_minus.shape[-1]).T
-        Y = self.X_minus.reshape(-1, self.X_minus.shape[-1]).T
+    #     U = self.U_minus.reshape(-1, self.U_minus.shape[-1]).T
+    #     Y = self.X_minus.reshape(-1, self.X_minus.shape[-1]).T
         
-        if len(Y.shape) == 1:
-            Y=Y.T
-            Y = np.expand_dims(Y, axis=0)
+    #     if len(Y.shape) == 1:
+    #         Y=Y.T
+    #         Y = np.expand_dims(Y, axis=0)
 
-        method = 'N4SID'
-        sys_id = system_identification(Y, U, method, SS_D_required = True, SS_fixed_order = xi_order)
+    #     method = 'N4SID'
+    #     sys_id = system_identification(Y, U, method, SS_D_required = True, SS_fixed_order = xi_order)
 
-        self.A_disc_sid,self.B_disc_sid,self.C_disc_sid,self.D_disc_sid = sys_id.A, sys_id.B, sys_id.C, sys_id.D
+    #     self.A_disc_sid,self.B_disc_sid,self.C_disc_sid,self.D_disc_sid = sys_id.A, sys_id.B, sys_id.C, sys_id.D
 
     def f_cont_dfl(self,t,xi,u):
 
