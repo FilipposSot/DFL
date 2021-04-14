@@ -5,39 +5,55 @@ from torch.utils.data.dataset import random_split
 from torch.autograd import Variable
 
 class ILDFL(torch.nn.Module):
-    def __init__(self, D_x, D_eta, D_u, H):
+    def __init__(self, D_x, D_zeta, D_eta, D_u, H):
         super(ILDFL, self).__init__()
 
         self.D_x = D_x
-        D_xi = D_eta + D_u
+        D_xi = D_x + D_zeta + D_eta + D_u
 
+        # eta = g(x)
         self.g = torch.nn.Sequential(
-            ILinear(D_x,H),
+            torch.nn.Linear(D_x+D_zeta,H),
+            torch.nn.ReLU(),
+            torch.nn.Linear(H,H),
+            torch.nn.ReLU(),
+            torch.nn.Linear(H,D_eta),
+            torch.nn.ReLU()
+        )
+
+        # Linear Dynamic Model
+        self.A = torch.nn.Linear(D_xi,D_x   )
+        self.Z = torch.nn.Linear(D_xi,D_zeta)
+        self.H = torch.nn.Linear(D_xi,D_eta )
+
+        self.g_u = torch.nn.Sequential(
+            ILinear(D_u,D_u),
             IReLU(),
-            ILinear(H,H),
+            ILinear(D_u,D_u),
             IReLU(),
-            ILinear(H,D_eta),
+            ILinear(D_u,D_u),
             IReLU()
         )
 
-        self.H = torch.nn.Linear(D_xi,D_eta)
+        self.D = torch.nn.Linear(D_u, D_zeta)
 
-    def forward(self, x_star):
-        x_tm1 = x_star[:,:self.D_x]
-        u_tm1 = x_star[:,self.D_x:]
+    def forward(self, x, zeta, u):
+        nu        = self.g_u(u)
+        zeta_star = zeta-self.D(nu)
+        xs        = torch.cat((x,zeta_star), 1)
+        eta       = self.g(xs)
+        xi        = torch.cat((xs,eta,u), 1)
 
-        eta_tm1 = self.g(x_tm1)
+        x_tp1 = self.A(xi)
+        zeta_star_tp1 = self.Z(xi)
+        eta_tp1 = self.H(xi)
 
-        xi_tm1 = torch.cat((eta_tm1,u_tm1), 1)
+        return x_tp1, zeta_star_tp1, eta_tp1
 
-        eta_t = self.H(xi_tm1)
-
-        return eta_t
-
-    def inv(self, eta):
-        z = eta
-        for l in range(len(self.g)-1, -1, -1):
-            z = self.g[l].inv(z)
+    def g_u_inv(self, nu):
+        z = nu
+        for l in range(len(self.g_u)-1, -1, -1):
+            z = self.g_u[l].inv(z)
         return z
 
 class IReLU(torch.nn.Module):

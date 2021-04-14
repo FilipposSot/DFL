@@ -1,20 +1,9 @@
 from abc import ABC, abstractmethod 
-import numpy as np 
 
 class DFLDynamicPlant(ABC):
     def __init__(self):
         pass
-
-    # @property
-    # @abstractmethod
-    # def A_x(self):
-    #     pass
-
-    # @property
-    # @abstractmethod
-    # def B_x(self):
-    #     pass
-
+    
     @abstractmethod
     def f(self,x,u,t):
         '''
@@ -41,15 +30,3 @@ class DFLDynamicPlant(ABC):
         outputs the values of the auxiliary variables
         '''
         pass
-
-    # @abstractmethod
-    # def gamma(self,x,u,t):
-    #     '''
-    #     transition equation of the auxiliary variables
-    #     '''
-    #     pass
-
-
-
-
-

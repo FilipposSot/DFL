@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 
-from dfl.dfl import *
-from dfl.dynamic_system import *
-from dfl.mpc import *
+import dfl.dynamic_system
+import dfl.dynamic_model as dm
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,7 +12,7 @@ k11 = 0.2
 k13 = 2.0
 b1  = 3.0
 
-class Plant1(DFLDynamicPlant):
+class Plant1(dfl.dynamic_system.DFLDynamicPlant):
     
     def __init__(self):
         
@@ -109,41 +108,31 @@ def sin_u_func(y,t):
 
 if __name__== "__main__":
     ################# DFL MODEL TEST ##############################################
-    plant1 = Plant1()
-    dfl1 = DFL(plant1, dt_data = 0.05, dt_control = 0.2, n_koop=1)
-    # setattr(plant1, "g", Plant1.g)
     driving_fun = sin_u_func
+    plant1 = Plant1()
 
-    dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 110 )
-    dfl1.clean_anticausal_eta()
-    dfl1.generate_DFL_disc_model()
-    dfl1.regress_K_matrix()
+    tru = dm.GroundTruth(plant1)
+    data = tru.generate_data_from_random_trajectories()
 
-    # x_0 = np.random.uniform(plant1.x_init_min,plant1.x_init_max)
-    x_0 = np.array([0])
-    seed = np.random.randint(5)
+    koo = dm.Koopman(plant1)
+    koo.learn(data)
 
-    np.random.seed(seed = seed)
-    t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, 10.0)
-    
-    np.random.seed(seed = seed)
-    t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, 10.0,continuous = False)
-    t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, 10.0)
+    dfl = dm.DFL(plant1)
+    dfl.learn(data)
+
+    x_0 = np.zeros(plant1.n_x)
+    t, u, x_tru, y_tru = tru.simulate_system(x_0, driving_fun, 10.0)
+    _, _, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, 10.0)
+    _, _, x_dfl, y_dfl = dfl.simulate_system(x_0, driving_fun, 10.0)
     
     fig, axs = plt.subplots(2, 1)
 
-    # axs[0].plot(t, x_nonlin[:,0], 'k', label='True')
-    axs[0].plot(t, x_dfl[:,0] ,'g-.', label='DFL')
-    # axs[0].plot(t, x_koop[:,0] ,'b--', label='Koopman')
+    axs[0].plot(t, x_tru[:,0] ,'k-', label='Ground Truth')
+    axs[0].plot(t, x_koo[:,0] ,'g-.', label='Koopman')
+    axs[0].plot(t, x_dfl[:,0] ,'r-.', label='DFL')
     axs[0].legend()
-
-    # axs[1].plot(t, y_nonlin[:,1],'r')
-    # axs[1].plot(t, y_dfl[:,1],'r-.')
-    # axs[1].plot(t, y_koop[:,1] ,'r--')
   
-    axs[1].plot(t, u_nonlin,'k')
-    # axs[2].plot(t, u_dfl,'r-.')
-    # axs[2].plot(t, u_koop,'b--')
+    axs[1].plot(t, u, 'k')
 
     axs[1].set_xlabel('time')
     
