@@ -6,6 +6,7 @@ import dfl.dynamic_model as dm
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
+import copy
 
 m = 1.0
 k11 = 0.2
@@ -35,12 +36,6 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
 
         self.u_min = np.array([-2.5])
         self.u_max = np.array([ 2.5])
-
-        # Hybrid model
-        self.P =  np.array([[1, 1]])
-
-        self.A_cont_eta_hybrid =   self.A_cont_eta.dot(np.linalg.pinv(self.P))
-
 
     # functions defining constituitive relations for this particular system
     @staticmethod
@@ -107,29 +102,31 @@ def sin_u_func(y,t):
     # return np.sin(3*t) 
 
 if __name__== "__main__":
-    ################# DFL MODEL TEST ##############################################
     driving_fun = sin_u_func
     plant1 = Plant1()
+    x_0 = np.zeros(plant1.n_x)
+    fig, axs = plt.subplots(2, 1)
 
     tru = dm.GroundTruth(plant1)
     data = tru.generate_data_from_random_trajectories()
-
-    koo = dm.Koopman(plant1)
-    koo.learn(data)
-
-    dfl = dm.DFL(plant1)
-    dfl.learn(data)
-
-    x_0 = np.zeros(plant1.n_x)
     t, u, x_tru, y_tru = tru.simulate_system(x_0, driving_fun, 10.0)
-    _, _, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, 10.0)
-    _, _, x_dfl, y_dfl = dfl.simulate_system(x_0, driving_fun, 10.0)
-    
-    fig, axs = plt.subplots(2, 1)
+    axs[0].plot(t, x_tru[:,0], 'k-', label='Ground Truth')
 
-    axs[0].plot(t, x_tru[:,0] ,'k-', label='Ground Truth')
-    axs[0].plot(t, x_koo[:,0] ,'g-.', label='Koopman')
-    axs[0].plot(t, x_dfl[:,0] ,'r-.', label='DFL')
+    koo = dm.Koopman(plant1, observable='polynomial')
+    koo.learn(copy.deepcopy(data))
+    _, _, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, 10.0)
+    axs[0].plot(t, x_koo[:,0], 'g-.', label='Koopman')
+
+    dfl = dm.DFL(plant1, ac_filter=True)
+    dfl.learn(copy.deepcopy(data))
+    _, _, x_dfl, y_dfl = dfl.simulate_system(x_0, driving_fun, 10.0)
+    axs[0].plot(t, x_dfl[:,0], 'r-.', label='DFL')
+
+    lrn = dm.L3(plant1, 2, ac_filter='linear')
+    lrn.learn(copy.deepcopy(data))
+    _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, 10.0)
+    axs[0].plot(t, x_lrn[:,0], 'b-.', label='L3')
+
     axs[0].legend()
   
     axs[1].plot(t, u, 'k')
