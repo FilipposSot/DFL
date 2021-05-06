@@ -6,7 +6,6 @@ import dfl.dynamic_model as dm
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
-import copy
 
 m = 1.0
 k11 = 0.2
@@ -16,24 +15,18 @@ b1  = 3.0
 class Plant1(dfl.dynamic_system.DFLDynamicPlant):
     
     def __init__(self):
-        
         self.n_x = 1
         self.n_eta = 2
         self.n_u = 1
 
-        self.n = self.n_x + self.n_eta
-
         # User defined matrices for DFL
-        self.A_cont_x  = np.array([[0.0]])
-
+        self.A_cont_x   = np.array([[0.0]])
         self.A_cont_eta = np.array([[0.0, 1.0]])
-
-        self.B_cont_x = np.array([[0.0]])
+        self.B_cont_x   = np.array([[0.0]])
 
         # Limits for inputs and states
         self.x_min = np.array([-2.0])
         self.x_max = np.array([ 2.0])
-
         self.u_min = np.array([-2.5])
         self.u_max = np.array([ 2.5])
 
@@ -57,15 +50,10 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
     # nonlinear observation equations
     @staticmethod
     def g(t,x,u):
-        if not isinstance(u,np.ndarray):
-            u = np.array([u])
-            
         q = x[0]
         ec = Plant1.phi_c(q)
         er = u[0]-ec
         f = Plant1.phi_r(er)
-
-        # return np.array([q,ec,f])
 
         return np.copy(x)
 
@@ -88,21 +76,8 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
 
         return eta
 
-###########################################################################################
-
-#Dummy forcing laws
-def zero_u_func(y,t):
-    return 1 
-
-def rand_u_func(y,t):
-    return np.random.normal(0.0,0.3)
-
-def sin_u_func(y,t):
-    return 0.5*signal.square(3 * t)
-    # return np.sin(3*t) 
-
 if __name__== "__main__":
-    driving_fun = sin_u_func
+    driving_fun = dfl.dynamic_system.DFLDynamicPlant.sin_u_func
     plant1 = Plant1()
     x_0 = np.zeros(plant1.n_x)
     fig, axs = plt.subplots(2, 1)
@@ -113,17 +88,17 @@ if __name__== "__main__":
     axs[0].plot(t, x_tru[:,0], 'k-', label='Ground Truth')
 
     koo = dm.Koopman(plant1, observable='polynomial')
-    koo.learn(copy.deepcopy(data))
+    koo.learn(data)
     _, _, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, 10.0)
     axs[0].plot(t, x_koo[:,0], 'g-.', label='Koopman')
 
     dfl = dm.DFL(plant1, ac_filter=True)
-    dfl.learn(copy.deepcopy(data))
+    dfl.learn(data)
     _, _, x_dfl, y_dfl = dfl.simulate_system(x_0, driving_fun, 10.0)
     axs[0].plot(t, x_dfl[:,0], 'r-.', label='DFL')
 
     lrn = dm.L3(plant1, 2, ac_filter='linear')
-    lrn.learn(copy.deepcopy(data))
+    lrn.learn(data)
     _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, 10.0)
     axs[0].plot(t, x_lrn[:,0], 'b-.', label='L3')
 

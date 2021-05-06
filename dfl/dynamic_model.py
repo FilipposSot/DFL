@@ -3,12 +3,11 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 import numpy as np
-import itertools
-import copy
-import scipy
-import torch
+import itertools, copy, torch, scipy
+from scipy import integrate, signal
 from enum import Enum
 import matplotlib.pyplot as plt
+
 import dfl.dynamic_system
 import dfl.L3Module as L3Module
 
@@ -18,7 +17,7 @@ np.set_printoptions(suppress = True)
 H = 256
 dtype = torch.FloatTensor
 device = 'cpu' #'cuda' if torch.cuda.is_available() else 'cpu'
-seed = 9
+seed = 8
 torch.manual_seed(seed)
 np.random.seed(seed = seed)
 # torch.autograd.set_detect_anomaly(True)
@@ -35,12 +34,12 @@ class DynamicModel(ABC):
         self.name = name
         self.trained = False
 
-    def simulate_system(self, x_0: np.ndarray, u_minus: np.ndarray, t_f: float, u_func: Callable, f_func: Callable, g_func: Callable, continuous: bool=True):
+    def simulate_system(self, x_0: np.ndarray, u_minus: np.ndarray, t_f: float, u_func, f_func: Callable, g_func: Callable, continuous: bool=True):
         '''
         Simulate a system in continuous time
         Arguments:
         x_0: initial state
-        u_func: control function
+        u_func: control function or time series array
         t_f: final time
         '''
 
@@ -61,14 +60,18 @@ class DynamicModel(ABC):
         x_t = copy.copy(x_0)
         y_t = g_func(t, x_t, u_minus)
 
-        u_t = u_func(y_t, t)
+        if callable(u_func):
+            u_t = u_func(y_t, t)
+        else:
+            u_t = u_func[0]
 
         t_array.append(t)
         x_array.append(x_t)
-        u_array.append([u_t])
+        u_array.append(u_t)
         y_array.append(g_func(t,x_t,u_minus))
 
         t_control_last = 0
+        i_u = 1
         #Simulate the system
         while t < t_f:
 
@@ -83,11 +86,15 @@ class DynamicModel(ABC):
             
             if t - t_control_last > self.dt_control:
                 t_control_last = copy.copy(t)
-                u_t = u_func(g_func(t, x_t, u_t), t)
+                if callable(u_func):
+                    u_t = u_func(g_func(t, x_t, u_t), t)
+                else:
+                    u_t = u_func[i_u]
+                    i_u+= 1
 
             t_array.append(t)
             x_array.append(x_t)
-            u_array.append([u_t])
+            u_array.append(u_t)
             y_array.append(y_t)
 
         return np.array(t_array), np.array(u_array), np.array(x_array), np.array(y_array)
@@ -108,71 +115,6 @@ class DynamicModel(ABC):
         minus = np.copy(np.array(data)[:, :-1,:])
         plus  = np.copy(np.array(data)[:,1:  ,:])
         return minus, plus
-
-    @staticmethod
-    def generate_data_from_file(self, file_name: str, test_ndx: int=4):
-        pass
-        # '''
-        # x = [x , y, z, v_x, v_y, omega], e = [a_x,a_y,alpha, F_x, F_y, m_soil]
-        # u = [u_x,u_y,tau]
-        # '''
-
-        # # Extract data from file
-        # data = np.load(file_name)
-        # t = data['t']
-        # x = data['x']
-        # e = data['e']
-        # u = data['u']
-        # n_traj = len(t)
-        # n_t = len(t[0])
-
-        # # Filter input from zeta
-        # zeta_lstsq = e.reshape(-1, e.shape[-1]).T
-        # u_lstsq = u.reshape(-1, u.shape[-1]).T
-        # D = np.linalg.lstsq(np.matmul(u_lstsq,u_lstsq.T),np.matmul(u_lstsq,zeta_lstsq.T),rcond=None)[0].T
-        # zeta_star = zeta_lstsq-np.matmul(D,u_lstsq)
-        # zeta_star = zeta_star.reshape(e.shape)
-        # # zeta_star = e
-
-        # # Assemble data into paradigm
-        # t_data = t
-        # x_data = x
-        # u_data = u
-        # eta_data = e
-        # eta_dot_data = e
-        # y_data = np.reshape([self.g_koop_poly(xs,self.n_koop) for traj in self.x_data for xs in traj], (n_traj, n_t, -1))
-
-        # # Set aside test data
-        # self.      t_data_test = np.copy(self.      t_data[test_ndx])
-        # self.      x_data_test = np.copy(self.      x_data[test_ndx])
-        # self.      u_data_test = np.copy(self.      u_data[test_ndx])
-        # self.    eta_data_test = np.copy(self.    eta_data[test_ndx])
-        # self.eta_dot_data_test = np.copy(self.eta_dot_data[test_ndx])
-        # self.  zetas_data_test = np.copy(self.  zetas_data[test_ndx])
-        # self.      y_data_test = np.copy(self.      y_data[test_ndx])
-
-        # # Remove test data from training data
-        # self.      t_data = np.delete(self.      t_data,test_ndx,0)
-        # self.      x_data = np.delete(self.      x_data,test_ndx,0)
-        # self.      u_data = np.delete(self.      u_data,test_ndx,0)
-        # self.    eta_data = np.delete(self.    eta_data,test_ndx,0)
-        # self.eta_dot_data = np.delete(self.eta_dot_data,test_ndx,0)
-        # self.  zetas_data = np.delete(self.  zetas_data,test_ndx,0)
-        # self.      y_data = np.delete(self.      y_data,test_ndx,0)
-
-        # # Inputs
-        # self.    Y_minus = np.copy(self.    y_data[:, :-1,:])
-        # self.    U_minus =         self.    u_data[:, :-1,:]
-        # self.    X_minus =         self.    x_data[:, :-1,:]
-        # self.  Eta_minus =         self.  eta_data[:, :-1,:]
-        # self.Zetas_minus =         self.zetas_data[:, :-1,:]
-
-        # # Outputs
-        # self.    Y_plus  = np.copy(self.    y_data[:,1:  ,:])
-        # self.    U_plus  =         self.    u_data[:,1:  ,:]
-        # self.    X_plus  =         self.    x_data[:,1:  ,:]
-        # self.  Eta_plus  =         self.  eta_data[:,1:  ,:]
-        # self.Zetas_plus  =         self.zetas_data[:,1:  ,:]
 
     @staticmethod
     def lift_space(data: np.ndarray, g: Callable):
@@ -392,6 +334,7 @@ class DFL(DynamicModel):
         super().__init__(dynamic_plant, dt_data, dt_control, name='DFL')
 
     def learn(self, data: np.ndarray):
+        data = copy.deepcopy(data)
         self.generate_DFL_disc_model(data['x']['minus'], data['eta']['minus'], data['u']['minus'], data['eta']['plus'], data['u']['plus'])
         self.trained = True
 
@@ -595,6 +538,9 @@ class L3(DynamicModel):
         return model
 
     def learn(self, data: np.ndarray):
+        # Copy data for manipulation
+        data = copy.deepcopy(data)
+
         # Format data
         x_minus = torch.transpose(torch.from_numpy(DynamicModel.flatten_trajectory_data(data['x'  ]['minus'])).type(dtype), 0,1)
         z_minus = torch.transpose(torch.from_numpy(DynamicModel.flatten_trajectory_data(data['eta']['minus'])).type(dtype), 0,1)

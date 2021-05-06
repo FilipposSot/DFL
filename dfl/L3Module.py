@@ -47,21 +47,25 @@ class LearnedDFL(torch.nn.Module):
         return self.A(xi), self.Z(xi), self.H(xi)
 
     def regress_D_matrix(self, u: torch.Tensor, zeta: torch.Tensor):
-        # breakpoint()
         self.D = torch.lstsq(torch.transpose(torch.matmul(torch.transpose(zeta, 0,1), u), 0,1), torch.transpose(torch.matmul(torch.transpose(u, 0,1), u), 0,1)).solution
 
     def _filter_linear_module(self, M: torch.nn.Linear):
+        # Extract matrix from linear module
         A = M.weight
+
+        # Partition matrix into zeta and u components
         A_z = A[:, self.D_x:self.D_x+self.D_z]
         A_u = A[:, self.D_x+self.D_z+self.D_e:]
-        # breakpoint()
+
+        # Add filter to u component
         A_u+= torch.matmul(A_z, torch.transpose(self.D, 0,1))
+
+        # Reassemble and return
         A[:, self.D_x+self.D_z+self.D_e:] = A_u
         M.weight.data = A
         return M
 
     def filter_linear_model(self):
-        # breakpoint()
         self.A = self._filter_linear_module(self.A)
         self.Z = self._filter_linear_module(self.Z)
         self.H = self._filter_linear_module(self.H)

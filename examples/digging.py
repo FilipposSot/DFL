@@ -1,24 +1,10 @@
 #!/usr/bin/env python
 
-from dfl.dfl import *
-from dfl.dynamic_system import *
-from dfl.mpc import *
-# from dfl.Transpose import Transpose
-
-import torch
-import torch.optim as optim
-import torch.nn as nn
-from torchviz import make_dot
-from torch.utils.data import Dataset, TensorDataset, DataLoader
-from torch.utils.data.dataset import random_split
-from torch.autograd import Variable
+import dfl.dynamic_system
+import dfl.dynamic_model as dm
 
 import numpy as np
-import matplotlib
 import matplotlib.pyplot as plt
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-
 from scipy import signal
 
 m = 1.0
@@ -26,184 +12,185 @@ k11 = 0.2
 k13 = 2.0
 b1  = 3.0
 
-class Plant1(DFLDynamicPlant):
+class Plant1(dfl.dynamic_system.DFLDynamicPlant):
     
     def __init__(self):
-        
         self.n_x = 6
-        self.n_zeta = 6
-        self.n_eta = 7
+        self.n_eta = 6
         self.n_u = 3
 
-        self.n = self.n_x + self.n_eta
-
-        # User defined matrices for DFL
-        self.A_cont_x  = np.zeros((self.n_x,self.n_x))
-
-        self.A_cont_eta = np.zeros((self.n_x,self.n_eta))
-
-        self.B_cont_x = np.zeros((self.n_x,self.n_u))
-
-        # Limits for inputs and states
-        self.x_min = np.array([-2.0,-2.0])
-        self.x_max = np.array([2.0 ,2.0])
-
-        self.u_min = np.array([-2.5])
-        self.u_max = np.array([ 2.5])
+        self.assign_random_system_model()
 
     # functions defining constituitive relations for this particular system
-    # @staticmethod
-    # def phi_c1(q):
-    #     e = k11*q + k13*q**3
-    #     return e
+    @staticmethod
+    def phi_c(q):
+        return np.sign(q)*q**2
 
-    # @staticmethod
-    # def phi_r1(f):
-    #     e = b1*np.sign(f)*f**2
-    #     return e
+    @staticmethod
+    def phi_r(f):
+        return 2*(1/(1+np.exp(-4*f))-0.5)
     
     # nonlinear state equations
     def f(self,t,x,u):
-
         x_dot = np.zeros(x.shape)
-        q,v = x[0],x[1]
-        x_dot[0] = v
-        x_dot[1] = -self.phi_r1(v) -self.phi_c1(q) + u 
+        eta = self.phi(t,x,u)
+        x_dot[0] = eta[1]
 
         return x_dot
 
     # nonlinear observation equations
     @staticmethod
     def g(t,x,u):
-        # q,v = x[0], x[1]
-        # y = np.array([q,v])
-        return np.copy(x)
-    
-    # @staticmethod
-    # def gkoop1(t,x,u):
-    #     q,v = x[0], x[1]
-    #     y = np.array([q,v,Plant1.phi_c1(q), Plant1.phi_r1(v)])
-    #     return y  
-    
-    # @staticmethod
-    # def gkoop2(t,x,u):
-    #     q,v = x[0],x[1]
+        if not isinstance(u,np.ndarray):
+            u = np.array([u])
+            
+        q = x[0]
+        ec = Plant1.phi_c(q)
+        er = u[0]-ec
+        f = Plant1.phi_r(er)
 
-    #     y = np.array([q,v,q**2,q**3,q**4,q**5,q**6,q**7,
-    #                   v**2,v**3,v**4,v**5,v**6,v**7,v**9,v**11,v**13,v**15,v**17,v**19,
-    #                   v*q,v*q**2,v*q**3,v*q**4,v*q**5,
-    #                   v**2*q,v**2*q**2,v**2*q**3,v**2*q**4,v**2
-    #                   *q**5,
-    #                   v**3*q,v**3*q**2,v**3*q**3,v**3*q**4,v**3*q**5])
-    #     return y 
+        return np.copy(x)
 
     # auxiliary variables (outputs from nonlinear elements)
     def phi(self,t,x,u):
         '''
         outputs the values of the auxiliary variables
         '''
-        q,v = x[0],x[1]
+        if not isinstance(u,np.ndarray):
+            u = np.array([u])
+            
+        q = x[0]
+        ec = Plant1.phi_c(q)
+        er = u[0]-ec
+        f = Plant1.phi_r(er)
         
         eta = np.zeros(self.n_eta)
-        eta[0] = self.phi_c1(q)
-        eta[1] = self.phi_r1(v)
+        eta[0] = ec
+        eta[1] = f
 
         return eta
+    
+    @staticmethod
+    def generate_data_from_file(file_name: str, test_ndx: int=4):
+        '''
+        x = [x , y, z, v_x, v_y, omega], e = [a_x,a_y,alpha, F_x, F_y, m_soil]
+        u = [u_x,u_y,tau]
+        '''
 
-###########################################################################################
+        # Extract data from file
+        data = np.load(file_name)
+        t = data['t']
+        x = data['x']
+        e = data['e']
+        u = data['u']
 
-#Dummy forcing laws
-def zero_u_func(y,t):
-    return 1 
+        # Assemble data into paradigm
+        t_data = t
+        x_data = x
+        u_data = u
+        eta_data = e
+        eta_dot_data = e
+        y_data = np.copy(x)
 
-def rand_u_func(y,t):
-    return np.random.normal(0.0,0.3)
+        # Set aside test data
+        t_data_test       = np.copy(t_data[test_ndx])
+        x_data_test       = np.copy(x_data[test_ndx])
+        u_data_test       = np.copy(u_data[test_ndx])
+        eta_data_test     = np.copy(eta_data[test_ndx])
+        eta_dot_data_test = np.copy(eta_dot_data[test_ndx])
+        y_data_test       = np.copy(y_data[test_ndx])
 
-def sin_u_func(y,t):
-    return np.sin(3*t)
+        # Remove test data from training data
+        t_data       = np.delete(      t_data,test_ndx,0)
+        x_data       = np.delete(      x_data,test_ndx,0)
+        u_data       = np.delete(      u_data,test_ndx,0)
+        eta_data     = np.delete(    eta_data,test_ndx,0)
+        eta_dot_data = np.delete(eta_dot_data,test_ndx,0)
+        y_data       = np.delete(      y_data,test_ndx,0)
 
-def square_u_func(y,t):
-    return 0.5*signal.square(3 * t)
+        # Inputs
+        y_minus   = np.copy(  y_data[:, :-1,:])
+        u_minus   =           u_data[:, :-1,:]
+        x_minus   =           x_data[:, :-1,:]
+        eta_minus =         eta_data[:, :-1,:]
+
+        # Outputs
+        y_plus   = np.copy(  y_data[:,1:  ,:])
+        u_plus   =           u_data[:,1:  ,:]
+        x_plus   =           x_data[:,1:  ,:]
+        eta_plus =         eta_data[:,1:  ,:]
+
+        # Return
+        data = {
+            't': t_data,
+            'u': {
+                'data':  u_data,
+                'minus': u_minus,
+                'plus':  u_plus
+            },
+            'x': {
+                'data':  x_data,
+                'minus': x_minus,
+                'plus':  x_plus
+            },
+            'y': {
+                'data':  y_data,
+                'minus': y_minus,
+                'plus':  y_plus
+            },
+            'eta': {
+                'data':  eta_data,
+                'minus': eta_minus,
+                'plus':  eta_plus
+            },
+            'eta_dot': {
+                'data':  eta_dot_data
+            }
+        }
+        test_data = {
+            't': t_data_test,
+            'u': u_data_test,
+            'x': x_data_test,
+            'y': y_data_test,
+            'eta': eta_data_test,
+            'eta_dot': eta_dot_data_test
+        }
+        return data, test_data
 
 if __name__== "__main__":
-    ################# DFL MODEL TEST ##############################################
     plant1 = Plant1()
-    dt_data = 0.01
-    dfl1 = DFL(plant1, dt_data = dt_data, dt_control = dt_data)
-    driving_fun = square_u_func
-
-    # dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
-    dfl1.generate_data_from_file('data_nick_not_flat.npz')
-    dfl1.learn_eta_fn()
-    # dfl1.generate_DFL_disc_model()
-    dfl1.regress_K_matrix()
-
-    driving_fun = lambda y,t : dfl1.u_data_test[round(t/dt_data)]
-    x_0 = dfl1.x_data_test[0]
-    x_0_aug = np.concatenate((x_0,dfl1.zetas_data_test[0]),0)
-
-    # t, u_nonlin, x_nonlin, y_nonlin = dfl1.simulate_system_nonlinear(x_0, driving_fun, T)
-    t = dfl1.t_data_test
-    u_nonlin = dfl1.u_data_test
-    x_nonlin = dfl1.x_data_test
-    y_nonlin = dfl1.y_data_test
-    T = dfl1.t_data_test[-1]
-    # breakpoint()
-    # t, u_dfl, x_dfl, y_dfl = dfl1.simulate_system_dfl(x_0, driving_fun, T, continuous = False)
-    t, u_lrn, x_lrn, y_lrn = dfl1.simulate_system_learned(x_0_aug, driving_fun, T)
-    t, u_koop, x_koop, y_koop = dfl1.simulate_system_koop(x_0, driving_fun, T)
-
-    # np.savez('unfiltered.npz',
-    #     t=t,
-    #     u_lrn=u_lrn,
-    #     x_lrn=x_lrn,
-    #     y_lrn=y_lrn
-    #     )
-
-    nf = np.load('unfiltered.npz',allow_pickle=True)
-    # breakpoint()
-    y_nf = nf['y_lrn']
-
-    sse_kop = np.sum((x_nonlin-x_koop[:,:6])**2)
-    sse_lrn = np.sum((x_nonlin-x_lrn [:,:6])**2)
-    sse_nf  = np.sum((x_nonlin-y_nf  [:,:6])**2)
-    print(sse_kop)
-    print(sse_lrn)
-    print(sse_nf)
-
-    matplotlib.rcParams.update({'font.size': 18})
-    plt.rcParams["font.family"] = "serif"
-    plt.rcParams["font.serif"] = "Times New Roman"
     fig, axs = plt.subplots(3, 1)
 
-    axs[0].plot(t, y_nonlin[:,0], 'k', label='True')
-    axs[0].plot(t, y_koop[:,0] ,'g-.', label='Koopman')
-    axs[0].plot(t, y_nf[:,0] ,'r-.', label='L3-NoF')
-    axs[0].plot(t, y_lrn[:,0] ,'b-.', label='L3')
-    axs[0].legend(ncol=4,bbox_to_anchor=(0, 1, 1, 0))
-    axs[0].set_ylim(-5,5)
-    # axs[0].tick_params(labelbottom = False, bottom = False)
+    data, test_data = Plant1.generate_data_from_file('data_nick_not_flat.npz')
+    driving_fun = test_data['u']
+    t = test_data['t']
+    x_0 = np.copy(test_data['x'][0,:])
+    axs[0].plot(t, test_data['x'][:,0], 'k-', label='Ground Truth')
+    axs[1].plot(t, test_data['x'][:,1], 'k-')
+    axs[2].plot(test_data['x'][:,0], test_data['x'][:,1], 'k-')
 
-    axs[1].plot(t, y_nonlin[:,1],'k')
-    axs[1].plot(t, y_koop[:,1] ,'g-.')
-    axs[1].plot(t, y_nf[:,1],'r-.')
-    axs[1].plot(t, y_lrn[:,1],'b-.')
-    axs[1].set_ylim(-2,0.5)
-  
-    axs[2].plot(y_nonlin[:,0], y_nonlin[:,1],'k')
-    axs[2].plot(y_koop[:,0], y_koop[:,1],'g-.')
-    axs[2].plot(y_nf[:,0], y_nf[:,1],'r-.')
-    axs[2].plot(y_lrn[:,0], y_lrn[:,1],'b-.')
-    axs[2].set_xlim(-3.5,1.8)
-    axs[2].set_ylim(-2,0.5)
+    koo = dm.Koopman(plant1, observable='polynomial')
+    koo.learn(data)
+    t, u, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, 10.0)
+    axs[0].plot(t, x_koo[:,0], 'g-.', label='Koopman')
+    axs[1].plot(t, x_koo[:,1], 'g-.')
+    axs[2].plot(x_koo[:,0], x_koo[:,1], 'g-.')
+    breakpoint()
+
+    lrn = dm.L3(plant1, 7, ac_filter='linear')
+    lrn.learn(data)
+    _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, 10.0)
+    axs[0].plot(t, x_lrn[:,0], 'b-.', label='L3')
+    axs[1].plot(t, x_lrn[:,1], 'b-.')
+    axs[2].plot(x_lrn[:,0], x_lrn[:,1], 'b-.')
+
+    axs[0].legend()
 
     axs[1].set_xlabel('time')
+    axs[2].set_xlabel('x')
     
     axs[0].set_ylabel('x')
     axs[1].set_ylabel('y')
-    axs[2].set_xlabel('x')
     axs[2].set_ylabel('y')
-
-    fig.subplots_adjust(hspace=0.5)
 
     plt.show()
