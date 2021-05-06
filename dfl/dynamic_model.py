@@ -17,14 +17,14 @@ np.set_printoptions(suppress = True)
 H = 256
 dtype = torch.FloatTensor
 device = 'cpu' #'cuda' if torch.cuda.is_available() else 'cpu'
-seed = 8
+seed = 9
 torch.manual_seed(seed)
 np.random.seed(seed = seed)
 # torch.autograd.set_detect_anomaly(True)
 torch.set_num_threads(8)
 
 RETRAIN = True
-RETRAIN = False
+# RETRAIN = False
 
 class DynamicModel(ABC):
     def __init__(self, dynamic_plant: dfl.dynamic_system.DFLDynamicPlant, dt_data: float=0.05, dt_control: float=0.1, name: str=''):
@@ -64,6 +64,7 @@ class DynamicModel(ABC):
             u_t = u_func(y_t, t)
         else:
             u_t = u_func[0]
+        # breakpoint()
 
         t_array.append(t)
         x_array.append(x_t)
@@ -91,7 +92,7 @@ class DynamicModel(ABC):
                 else:
                     u_t = u_func[i_u]
                     i_u+= 1
-
+            # breakpoint()
             t_array.append(t)
             x_array.append(x_t)
             u_array.append(u_t)

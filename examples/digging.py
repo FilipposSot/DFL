@@ -164,22 +164,23 @@ if __name__== "__main__":
     data, test_data = Plant1.generate_data_from_file('data_nick_not_flat.npz')
     driving_fun = test_data['u']
     t = test_data['t']
+    dt_data = t[1]-t[0]
+    dt_control = t[1]-t[0]
     x_0 = np.copy(test_data['x'][0,:])
     axs[0].plot(t, test_data['x'][:,0], 'k-', label='Ground Truth')
     axs[1].plot(t, test_data['x'][:,1], 'k-')
     axs[2].plot(test_data['x'][:,0], test_data['x'][:,1], 'k-')
 
-    koo = dm.Koopman(plant1, observable='polynomial')
+    koo = dm.Koopman(plant1, dt_data=dt_data, dt_control=dt_control, observable='polynomial')
     koo.learn(data)
-    t, u, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, 10.0)
+    t, u, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, t[-1])
     axs[0].plot(t, x_koo[:,0], 'g-.', label='Koopman')
     axs[1].plot(t, x_koo[:,1], 'g-.')
     axs[2].plot(x_koo[:,0], x_koo[:,1], 'g-.')
-    breakpoint()
 
-    lrn = dm.L3(plant1, 7, ac_filter='linear')
+    lrn = dm.L3(plant1, 7, dt_data=dt_data, dt_control=dt_control, ac_filter='linear')
     lrn.learn(data)
-    _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, 10.0)
+    _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, t[-1])
     axs[0].plot(t, x_lrn[:,0], 'b-.', label='L3')
     axs[1].plot(t, x_lrn[:,1], 'b-.')
     axs[2].plot(x_lrn[:,0], x_lrn[:,1], 'b-.')
