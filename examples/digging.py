@@ -161,7 +161,7 @@ if __name__== "__main__":
     plant1 = Plant1()
     fig, axs = plt.subplots(3, 1)
 
-    data, test_data = Plant1.generate_data_from_file('data_nick_not_flat.npz')
+    data, test_data = Plant1.generate_data_from_file('data_nick_flat.npz', test_ndx=4)
     driving_fun = test_data['u']
     t = test_data['t']
     dt_data = t[1]-t[0]
@@ -171,7 +171,7 @@ if __name__== "__main__":
     axs[1].plot(t, test_data['x'][:,1], 'k-')
     axs[2].plot(test_data['x'][:,0], test_data['x'][:,1], 'k-')
 
-    koo = dm.Koopman(plant1, dt_data=dt_data, dt_control=dt_control, observable='polynomial')
+    koo = dm.Koopman(plant1, dt_data=dt_data, dt_control=dt_control, observable='polynomial', n_koop=32)
     koo.learn(data)
     t, u, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, t[-1])
     axs[0].plot(t, x_koo[:,0], 'g-.', label='Koopman')
