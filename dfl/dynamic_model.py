@@ -24,7 +24,7 @@ np.random.seed(seed = seed)
 torch.set_num_threads(8)
 
 RETRAIN = True
-# RETRAIN = False
+RETRAIN = False
 
 class DynamicModel(ABC):
     def __init__(self, dynamic_plant: dfl.dynamic_system.DFLDynamicPlant, dt_data: float=0.05, dt_control: float=0.1, name: str=''):
@@ -388,6 +388,15 @@ class DFL(DynamicModel):
                                     [H_disc_u]])
 
     def regress_D_matrix(U_minus: np.ndarray, Eta_minus: np.ndarray):
+        # Copy data
+        U_minus = np.copy(U_minus)
+        Eta_minus = np.copy(Eta_minus)
+
+        # Mean-zero
+        U_minus-= np.mean(U_minus,1)
+        Eta_minus-= np.mean(Eta_minus,1)[:,None]
+
+        # Regress
         return np.linalg.lstsq(np.matmul(U_minus, U_minus.T).T, np.matmul(Eta_minus, U_minus.T).T, rcond=None)[0].T
 
     def f(self, t: float, x: np.ndarray, u: np.ndarray):

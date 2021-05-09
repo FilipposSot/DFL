@@ -16,7 +16,7 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
     
     def __init__(self):
         self.n_x = 6
-        self.n_eta = 6
+        self.n_eta = 3
         self.n_u = 3
 
         self.assign_random_system_model()
@@ -73,7 +73,7 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
     @staticmethod
     def generate_data_from_file(file_name: str, test_ndx: int=4):
         '''
-        x = [x , y, z, v_x, v_y, omega], e = [a_x,a_y,alpha, F_x, F_y, m_soil]
+        x = [x, y, z, v_x, v_y, omega], e = [a_x,a_y,alpha, F_x, F_y, m_soil]
         u = [u_x,u_y,tau]
         '''
 
@@ -82,6 +82,7 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
         t = data['t']
         x = data['x']
         e = data['e']
+        e = e[:,:,3:] # Filippos Curating: rm accelerations
         u = data['u']
 
         # Assemble data into paradigm
@@ -159,39 +160,42 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
 
 if __name__== "__main__":
     plant1 = Plant1()
-    fig, axs = plt.subplots(3, 1)
+    fig, axs = plt.subplots(4, 1)
 
-    data, test_data = Plant1.generate_data_from_file('data_nick_flat.npz', test_ndx=4)
+    data, test_data = Plant1.generate_data_from_file('data_nick_flat.npz', test_ndx=3) #1
     driving_fun = test_data['u']
     t = test_data['t']
     dt_data = t[1]-t[0]
     dt_control = t[1]-t[0]
     x_0 = np.copy(test_data['x'][0,:])
-    axs[0].plot(t, test_data['x'][:,0], 'k-', label='Ground Truth')
-    axs[1].plot(t, test_data['x'][:,1], 'k-')
-    axs[2].plot(test_data['x'][:,0], test_data['x'][:,1], 'k-')
+    axs[0].plot(t, test_data['x'][:,1], 'k-', label='Ground Truth')
+    axs[1].plot(t, test_data['eta'][:,0], 'k-')
+    axs[2].plot(t, test_data['eta'][:,1], 'k-')
+    axs[3].plot(t, test_data['eta'][:,2], 'k-')
 
     koo = dm.Koopman(plant1, dt_data=dt_data, dt_control=dt_control, observable='polynomial', n_koop=32)
     koo.learn(data)
     t, u, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, t[-1])
-    axs[0].plot(t, x_koo[:,0], 'g-.', label='Koopman')
-    axs[1].plot(t, x_koo[:,1], 'g-.')
-    axs[2].plot(x_koo[:,0], x_koo[:,1], 'g-.')
+    axs[0].plot(t, x_koo[:,1], 'g-.', label='Koopman')
+    axs[1].plot(t, x_koo[:,6], 'g-.')
+    axs[2].plot(t, x_koo[:,7], 'g-.')
+    axs[3].plot(t, x_koo[:,8], 'g-.')
 
     lrn = dm.L3(plant1, 7, dt_data=dt_data, dt_control=dt_control, ac_filter='linear')
     lrn.learn(data)
     _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, t[-1])
-    axs[0].plot(t, x_lrn[:,0], 'b-.', label='L3')
-    axs[1].plot(t, x_lrn[:,1], 'b-.')
-    axs[2].plot(x_lrn[:,0], x_lrn[:,1], 'b-.')
+    axs[0].plot(t, x_lrn[:,1], 'b-.', label='L3')
+    axs[1].plot(t, x_lrn[:,6], 'b-.')
+    axs[2].plot(t, x_lrn[:,7], 'b-.')
+    axs[3].plot(t, x_lrn[:,8], 'b-.')
 
     axs[0].legend()
 
-    axs[1].set_xlabel('time')
-    axs[2].set_xlabel('x')
+    axs[3].set_xlabel('time')
     
-    axs[0].set_ylabel('x')
-    axs[1].set_ylabel('y')
-    axs[2].set_ylabel('y')
+    axs[0].set_ylabel('Depth')
+    axs[1].set_ylabel('F_x')
+    axs[2].set_ylabel('F_y')
+    axs[3].set_ylabel('m_soil')
 
     plt.show()

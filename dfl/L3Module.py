@@ -19,8 +19,8 @@ class LearnedDFL(torch.nn.Module):
         self.g = torch.nn.Sequential(
             torch.nn.Linear(D_x+D_z,H),
             torch.nn.ReLU(),
-            torch.nn.Linear(H,H),
-            torch.nn.ReLU(),
+            # torch.nn.Linear(H,H),
+            # torch.nn.ReLU(),
             torch.nn.Linear(H,D_e),
             torch.nn.ReLU()
         )
@@ -47,6 +47,15 @@ class LearnedDFL(torch.nn.Module):
         return self.A(xi), self.Z(xi), self.H(xi)
 
     def regress_D_matrix(self, u: torch.Tensor, zeta: torch.Tensor):
+        # Copy data tensors
+        u = u.detach().clone()
+        zeta = zeta.detach().clone()
+
+        # Mean-zero
+        u = u-torch.mean(u,0)
+        zeta = zeta-torch.mean(zeta,0)
+
+        # Regress D
         self.D = torch.lstsq(torch.transpose(torch.matmul(torch.transpose(zeta, 0,1), u), 0,1), torch.transpose(torch.matmul(torch.transpose(u, 0,1), u), 0,1)).solution
 
     def _filter_linear_module(self, M: torch.nn.Linear):

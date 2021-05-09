@@ -97,10 +97,10 @@ if __name__== "__main__":
     _, _, x_dfl, y_dfl = dfl.simulate_system(x_0, driving_fun, 10.0)
     axs[0].plot(t, x_dfl[:,0], 'r-.', label='DFL')
 
-    lrn = dm.L3(plant1, 2, ac_filter='linear')
-    lrn.learn(data)
-    _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, 10.0)
-    axs[0].plot(t, x_lrn[:,0], 'b-.', label='L3')
+    # lrn = dm.L3(plant1, 2, ac_filter='linear')
+    # lrn.learn(data)
+    # _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, 10.0)
+    # axs[0].plot(t, x_lrn[:,0], 'b-.', label='L3')
 
     axs[0].legend()
   
