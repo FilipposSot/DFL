@@ -133,7 +133,7 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
 
 def main(test_ndx):
     plant1 = Plant1()
-    fig, axs = plt.subplots(3,3)
+    fig, axs = plt.subplots(3,2)
     # fig.suptitle(test_ndx)
 
     data, test_data = Plant1.generate_data_from_file('data_nick_not_flat.npz', test_ndx=test_ndx)
@@ -145,45 +145,73 @@ def main(test_ndx):
     z_0 = np.copy(test_data['eta'][0,:])
     xs_0 = np.concatenate((x_0,z_0))
     axs[0,0].plot(t, test_data['x'  ][:,0], 'k-', label='Ground Truth') # x
-    axs[0,1].plot(t, test_data['x'  ][:,1], 'k-')   # y
-    axs[0,2].plot(t, test_data['x'  ][:,2], 'k-')   # z
-    axs[1,0].plot(t, test_data['x'  ][:,3], 'k-')   # vx
-    axs[1,1].plot(t, test_data['x'  ][:,4], 'k-')   # vy
-    axs[1,2].plot(t, test_data['x'  ][:,5], 'k-')   # w
-    axs[2,0].plot(t, test_data['eta'][:,0], 'k-')   # Fx
-    axs[2,1].plot(t, test_data['eta'][:,1], 'k-')   # Fx
-    axs[2,2].plot(t, test_data['eta'][:,2], 'k-')   # m
+    axs[1,0].plot(t, test_data['x'  ][:,1], 'k-')   # y
+    axs[2,0].plot(t, test_data['x'  ][:,2], 'k-')   # phi
+    axs[0,1].plot(t, test_data['eta'][:,0], 'k-')   # Fx
+    axs[1,1].plot(t, test_data['eta'][:,1], 'k-')   # Fx
+    axs[2,1].plot(t, test_data['eta'][:,2], 'k-')   # m
 
-    koo = dm.Koopman(plant1, dt_data=dt_data, dt_control=dt_control, observable='polynomial', n_koop=len(xs_0))
-    koo.learn(data, dmd=True)
-    t, u, x_koo, y_koo = koo.simulate_system(xs_0, driving_fun, t[-1])
+    koo = dm.Koopman(plant1, dt_data=dt_data, dt_control=dt_control, observable='polynomial', n_koop=64)
+    koo.learn(data)
+    t, u, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, t[-1])
     axs[0,0].plot(t, x_koo[:,0], 'g-.', label='Koopman')
-    axs[0,1].plot(t, x_koo[:,1], 'g-.')
-    axs[0,2].plot(t, x_koo[:,2], 'g-.')
-    axs[1,0].plot(t, x_koo[:,3], 'g-.')
-    axs[1,1].plot(t, x_koo[:,4], 'g-.')
-    axs[1,2].plot(t, x_koo[:,5], 'g-.')
-    axs[2,0].plot(t, x_koo[:,6], 'g-.')
-    axs[2,1].plot(t, x_koo[:,7], 'g-.')
-    axs[2,2].plot(t, x_koo[:,8], 'g-.')
+    axs[1,0].plot(t, x_koo[:,1], 'g-.')
+    axs[2,0].plot(t, x_koo[:,2], 'g-.')
+    # axs[0,1].plot(t, x_koo[:,6], 'g-.')
+    # axs[1,1].plot(t, x_koo[:,7], 'g-.')
+    # axs[2,1].plot(t, x_koo[:,8], 'g-.')
 
-    lrn = dm.L3(plant1, 4, dt_data=dt_data, dt_control=dt_control, ac_filter='linear', retrain=False, model_fn='model', hidden_units_per_layer=64)
+    dmd = dm.Koopman(plant1, dt_data=dt_data, dt_control=dt_control, observable='polynomial', n_koop=len(xs_0))
+    dmd.learn(data, dmd=True)
+    _, _, x_dmd, y_dmd = dmd.simulate_system(xs_0, driving_fun, t[-1])
+    axs[0,0].plot(t, x_dmd[:,0], 'r-.', label='DMDc')
+    axs[1,0].plot(t, x_dmd[:,1], 'r-.')
+    axs[2,0].plot(t, x_dmd[:,2], 'r-.')
+    axs[0,1].plot(t, x_dmd[:,6], 'r-.')
+    axs[1,1].plot(t, x_dmd[:,7], 'r-.')
+    axs[2,1].plot(t, x_dmd[:,8], 'r-.')
+
+    lrn = dm.L3(plant1, 4, dt_data=dt_data, dt_control=dt_control, ac_filter='linear', retrain=False, model_fn='model_dig', hidden_units_per_layer=64)
     lrn.learn(data)
     _, _, x_lrn, y_lrn = lrn.simulate_system(xs_0, driving_fun, t[-1])
     axs[0,0].plot(t, x_lrn[:,0], 'b-.', label='L3')
-    axs[0,1].plot(t, x_lrn[:,1], 'b-.')
-    axs[0,2].plot(t, x_lrn[:,2], 'b-.')
-    axs[1,0].plot(t, x_lrn[:,3], 'b-.')
-    axs[1,1].plot(t, x_lrn[:,4], 'b-.')
-    axs[1,2].plot(t, x_lrn[:,5], 'b-.')
-    axs[2,0].plot(t, x_lrn[:,6], 'b-.')
-    axs[2,1].plot(t, x_lrn[:,7], 'b-.')
-    axs[2,2].plot(t, x_lrn[:,8], 'b-.')
+    axs[1,0].plot(t, x_lrn[:,1], 'b-.')
+    axs[2,0].plot(t, x_lrn[:,2], 'b-.')
+    axs[0,1].plot(t, x_lrn[:,6], 'b-.')
+    axs[1,1].plot(t, x_lrn[:,7], 'b-.')
+    axs[2,1].plot(t, x_lrn[:,8], 'b-.')
+
+    lrn = dm.L3(plant1, 4, dt_data=dt_data, dt_control=dt_control, ac_filter='none', retrain=True, model_fn='model', hidden_units_per_layer=64)
+    lrn.learn(data)
+    _, _, x_lrn, y_lrn = lrn.simulate_system(xs_0, driving_fun, t[-1])
+    axs[0,0].plot(t, x_lrn[:,0], 'm-.', label='L3 (NoF)')
+    axs[1,0].plot(t, x_lrn[:,1], 'm-.')
+    axs[2,0].plot(t, x_lrn[:,2], 'm-.')
+    axs[0,1].plot(t, x_lrn[:,6], 'm-.')
+    axs[1,1].plot(t, x_lrn[:,7], 'm-.')
+    axs[2,1].plot(t, x_lrn[:,8], 'm-.')
 
     axs[0,0].legend()
 
-    axs[1,0].set_xlabel('time')
-    axs[1,1].set_xlabel('time')
+    axs[2,0].set_xlabel('time (s)')
+    axs[2,1].set_xlabel('time (s)')
+
+    axs[0,0].set_ylabel('x (m)')
+    axs[1,0].set_ylabel('y (m)')
+    axs[2,0].set_ylabel('phi (rad)')
+    axs[0,1].set_ylabel('F_x (kN)')
+    axs[1,1].set_ylabel('F_y (kN)')
+    axs[2,1].set_ylabel('m_soil (MT)')
+
+    for r in range(2):
+        for c in range(2):
+            axs[r,c].set_xticks([])
+
+    for r in range(3):
+        axs[r,0].set_xlim(-0.1,2)
+    axs[0,0].set_ylim(-3.4,-2.2)
+    axs[1,0].set_ylim(0.1,0.7)
+    axs[2,0].set_ylim(1.1,2.3)
     
     # axs[0,0].set_ylabel('Depth')
     # axs[1,0].set_ylabel('F_x')

@@ -539,16 +539,15 @@ class L3(DynamicModel):
 
             print(pstr)
 
-        # plt.figure()
-        # plt.semilogy(range(len(  training_losses)),   training_losses, label=  'Training Loss')
-        # plt.semilogy(range(len(validation_losses)), validation_losses, label='Validation Loss')
-        # plt.xlabel('Epoch')
-        # plt.ylabel('Loss')
-        # plt.legend()
-        # if title is not None:
-        #     plt.title(title)
-        # plt.savefig('loss_curves.png')
-        # plt.close()
+        fig, axs = plt.subplots(1,1)
+        axs.semilogy(range(len(  training_losses)),   training_losses, label=  'Training Loss')
+        axs.semilogy(range(len(validation_losses)), validation_losses, label='Validation Loss')
+        axs.set_xlabel('Epoch')
+        axs.set_ylabel('Loss')
+        axs.legend()
+        if title is not None:
+            axs.title(title)
+        plt.show()
 
         model.eval()
         return model
