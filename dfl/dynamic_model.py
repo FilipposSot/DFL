@@ -21,10 +21,7 @@ seed = 9
 torch.manual_seed(seed)
 np.random.seed(seed = seed)
 # torch.autograd.set_detect_anomaly(True)
-torch.set_num_threads(8)
-
-RETRAIN = True
-RETRAIN = False
+# torch.set_num_threads(8)
 
 class DynamicModel(ABC):
     def __init__(self, dynamic_plant: dfl.dynamic_system.DFLDynamicPlant, dt_data: float=0.05, dt_control: float=0.1, name: str=''):
@@ -57,14 +54,13 @@ class DynamicModel(ABC):
         y_array = []
         
         # initial state and 
-        x_t = copy.copy(x_0)
+        x_t = np.copy(x_0)
         y_t = g_func(t, x_t, u_minus)
 
         if callable(u_func):
             u_t = u_func(y_t, t)
         else:
             u_t = u_func[0]
-        # breakpoint()
 
         t_array.append(t)
         x_array.append(x_t)
@@ -240,8 +236,13 @@ class Koopman(DynamicModel):
 
         super().__init__(dynamic_plant, dt_data, dt_control, name='Koopman')
 
-    def learn(self, data: np.ndarray):
-        _, y_minus, y_plus = DynamicModel.lift_space(data['x']['data'], self.g)
+    def learn(self, data: np.ndarray, dmd: bool=False):
+        if dmd:
+            x = np.concatenate((data['x']['data'],data['eta']['data']),2)
+        else:
+            x = data['x']['data']
+
+        _, y_minus, y_plus = DynamicModel.lift_space(x, self.g)
 
         self.regress_K_matrix(data['u']['minus'], y_minus, y_plus)
 
@@ -428,11 +429,13 @@ class L3(DynamicModel):
         LINEAR = 1
         NONLINEAR = 2
 
-    def __init__(self, dynamic_plant: dfl.dynamic_system.DFLDynamicPlant, n_eta: int, dt_data: float=0.05, dt_control: float=0.1, ac_filter: str='none'):
+    def __init__(self, dynamic_plant: dfl.dynamic_system.DFLDynamicPlant, n_eta: int, dt_data: float=0.05, dt_control: float=0.1, ac_filter: str='none', model_fn: str='model', retrain: bool=True, hidden_units_per_layer: int=256):
         self.n_x = dynamic_plant.n_x
         self.n_z = dynamic_plant.n_eta
         self.n_e = n_eta
         self.n_u = dynamic_plant.n_u
+
+        self.hidden_units_per_layer = hidden_units_per_layer
 
         if ac_filter == 'none':
             self.ac_filter = L3.AC_Filter.NONE
@@ -442,6 +445,9 @@ class L3(DynamicModel):
             self.ac_filter = L3.AC_Filter.NONLINEAR
         else:
             raise KeyError('Unsupported AC filter: {}'.format(ac_filter))
+
+        self.model_fn = model_fn
+        self.retrain = retrain
 
         super().__init__(dynamic_plant, dt_data, dt_control, name='L3')
 
@@ -547,7 +553,7 @@ class L3(DynamicModel):
         model.eval()
         return model
 
-    def learn(self, data: np.ndarray):
+    def learn(self, data: dict):
         # Copy data for manipulation
         data = copy.deepcopy(data)
 
@@ -561,20 +567,20 @@ class L3(DynamicModel):
 
         # Initialize model
         if self.ac_filter == L3.AC_Filter.NONLINEAR:
-            self.model = L3Module.ILDFL     (self.n_x, self.n_z, self.n_e, self.n_u, 256)
+            self.model = L3Module.ILDFL     (self.n_x, self.n_z, self.n_e, self.n_u, self.hidden_units_per_layer)
         else:
-            self.model = L3Module.LearnedDFL(self.n_x, self.n_z, self.n_e, self.n_u, 256)
+            self.model = L3Module.LearnedDFL(self.n_x, self.n_z, self.n_e, self.n_u, self.hidden_units_per_layer)
 
         # If anticausal filter is linear, learn D
         if self.ac_filter == L3.AC_Filter.LINEAR:
             self.model.regress_D_matrix(torch.transpose(u_minus, 0,1), torch.transpose(z_minus, 0,1))
 
         # Train/load model
-        if RETRAIN:
+        if self.retrain:
             self.model = self.train_model(self.model, torch.cat((x_minus, z_minus, u_minus), 0), torch.cat((x_plus,z_plus,u_plus), 0))
-            torch.save(self.model.state_dict(), 'model.pt')
+            torch.save(self.model.state_dict(), '{}.pt'.format(self.model_fn))
         else:
-            self.model.load_state_dict(torch.load('model.pt'))
+            self.model.load_state_dict(torch.load('{}.pt'.format(self.model_fn)))
         self.model.filter_linear_model()
 
         def augmented_state(x, z, u):
@@ -637,6 +643,7 @@ class L3(DynamicModel):
     def simulate_system(self, xs_0: np.ndarray, u_func: Callable, t_f: float):
         x_0 = xs_0[:self.n_x]
         z_0 = xs_0[self.n_x:] if len(xs_0)>self.n_x else self.plant.phi(0,x_0,0)
+        assert len(z_0)==self.n_z
         u_0 = np.zeros(self.n_u)
 
         xs_0 = self.augmented_state(x_0, z_0, u_0)

@@ -32,48 +32,21 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
     
     # nonlinear state equations
     def f(self,t,x,u):
-        x_dot = np.zeros(x.shape)
-        eta = self.phi(t,x,u)
-        x_dot[0] = eta[1]
-
-        return x_dot
+        pass
 
     # nonlinear observation equations
     @staticmethod
     def g(t,x,u):
-        if not isinstance(u,np.ndarray):
-            u = np.array([u])
-            
-        q = x[0]
-        ec = Plant1.phi_c(q)
-        er = u[0]-ec
-        f = Plant1.phi_r(er)
-
         return np.copy(x)
 
     # auxiliary variables (outputs from nonlinear elements)
     def phi(self,t,x,u):
-        '''
-        outputs the values of the auxiliary variables
-        '''
-        if not isinstance(u,np.ndarray):
-            u = np.array([u])
-            
-        q = x[0]
-        ec = Plant1.phi_c(q)
-        er = u[0]-ec
-        f = Plant1.phi_r(er)
-        
-        eta = np.zeros(self.n_eta)
-        eta[0] = ec
-        eta[1] = f
-
-        return eta
+        pass
     
     @staticmethod
     def generate_data_from_file(file_name: str, test_ndx: int=4):
         '''
-        x = [x, y, z, v_x, v_y, omega], e = [a_x,a_y,alpha, F_x, F_y, m_soil]
+        x = [x, y, phi, v_x, v_y, omega], e = [a_x,a_y,alpha, F_x, F_y, m_soil]
         u = [u_x,u_y,tau]
         '''
 
@@ -158,44 +131,78 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
         }
         return data, test_data
 
-if __name__== "__main__":
+def main(test_ndx):
     plant1 = Plant1()
-    fig, axs = plt.subplots(4, 1)
+    fig, axs = plt.subplots(3,3)
+    # fig.suptitle(test_ndx)
 
-    data, test_data = Plant1.generate_data_from_file('data_nick_flat.npz', test_ndx=3) #1
+    data, test_data = Plant1.generate_data_from_file('data_nick_not_flat.npz', test_ndx=test_ndx)
     driving_fun = test_data['u']
     t = test_data['t']
     dt_data = t[1]-t[0]
     dt_control = t[1]-t[0]
-    x_0 = np.copy(test_data['x'][0,:])
-    axs[0].plot(t, test_data['x'][:,1], 'k-', label='Ground Truth')
-    axs[1].plot(t, test_data['eta'][:,0], 'k-')
-    axs[2].plot(t, test_data['eta'][:,1], 'k-')
-    axs[3].plot(t, test_data['eta'][:,2], 'k-')
+    x_0 = np.copy(test_data['x'  ][0,:])
+    z_0 = np.copy(test_data['eta'][0,:])
+    xs_0 = np.concatenate((x_0,z_0))
+    axs[0,0].plot(t, test_data['x'  ][:,0], 'k-', label='Ground Truth') # x
+    axs[0,1].plot(t, test_data['x'  ][:,1], 'k-')   # y
+    axs[0,2].plot(t, test_data['x'  ][:,2], 'k-')   # z
+    axs[1,0].plot(t, test_data['x'  ][:,3], 'k-')   # vx
+    axs[1,1].plot(t, test_data['x'  ][:,4], 'k-')   # vy
+    axs[1,2].plot(t, test_data['x'  ][:,5], 'k-')   # w
+    axs[2,0].plot(t, test_data['eta'][:,0], 'k-')   # Fx
+    axs[2,1].plot(t, test_data['eta'][:,1], 'k-')   # Fx
+    axs[2,2].plot(t, test_data['eta'][:,2], 'k-')   # m
 
-    koo = dm.Koopman(plant1, dt_data=dt_data, dt_control=dt_control, observable='polynomial', n_koop=32)
-    koo.learn(data)
-    t, u, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, t[-1])
-    axs[0].plot(t, x_koo[:,1], 'g-.', label='Koopman')
-    axs[1].plot(t, x_koo[:,6], 'g-.')
-    axs[2].plot(t, x_koo[:,7], 'g-.')
-    axs[3].plot(t, x_koo[:,8], 'g-.')
+    koo = dm.Koopman(plant1, dt_data=dt_data, dt_control=dt_control, observable='polynomial', n_koop=len(xs_0))
+    koo.learn(data, dmd=True)
+    t, u, x_koo, y_koo = koo.simulate_system(xs_0, driving_fun, t[-1])
+    axs[0,0].plot(t, x_koo[:,0], 'g-.', label='Koopman')
+    axs[0,1].plot(t, x_koo[:,1], 'g-.')
+    axs[0,2].plot(t, x_koo[:,2], 'g-.')
+    axs[1,0].plot(t, x_koo[:,3], 'g-.')
+    axs[1,1].plot(t, x_koo[:,4], 'g-.')
+    axs[1,2].plot(t, x_koo[:,5], 'g-.')
+    axs[2,0].plot(t, x_koo[:,6], 'g-.')
+    axs[2,1].plot(t, x_koo[:,7], 'g-.')
+    axs[2,2].plot(t, x_koo[:,8], 'g-.')
 
-    lrn = dm.L3(plant1, 7, dt_data=dt_data, dt_control=dt_control, ac_filter='linear')
+    lrn = dm.L3(plant1, 4, dt_data=dt_data, dt_control=dt_control, ac_filter='linear', retrain=False, model_fn='model', hidden_units_per_layer=64)
     lrn.learn(data)
-    _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, t[-1])
-    axs[0].plot(t, x_lrn[:,1], 'b-.', label='L3')
-    axs[1].plot(t, x_lrn[:,6], 'b-.')
-    axs[2].plot(t, x_lrn[:,7], 'b-.')
-    axs[3].plot(t, x_lrn[:,8], 'b-.')
+    _, _, x_lrn, y_lrn = lrn.simulate_system(xs_0, driving_fun, t[-1])
+    axs[0,0].plot(t, x_lrn[:,0], 'b-.', label='L3')
+    axs[0,1].plot(t, x_lrn[:,1], 'b-.')
+    axs[0,2].plot(t, x_lrn[:,2], 'b-.')
+    axs[1,0].plot(t, x_lrn[:,3], 'b-.')
+    axs[1,1].plot(t, x_lrn[:,4], 'b-.')
+    axs[1,2].plot(t, x_lrn[:,5], 'b-.')
+    axs[2,0].plot(t, x_lrn[:,6], 'b-.')
+    axs[2,1].plot(t, x_lrn[:,7], 'b-.')
+    axs[2,2].plot(t, x_lrn[:,8], 'b-.')
 
-    axs[0].legend()
+    axs[0,0].legend()
 
-    axs[3].set_xlabel('time')
+    axs[1,0].set_xlabel('time')
+    axs[1,1].set_xlabel('time')
     
-    axs[0].set_ylabel('Depth')
-    axs[1].set_ylabel('F_x')
-    axs[2].set_ylabel('F_y')
-    axs[3].set_ylabel('m_soil')
+    # axs[0,0].set_ylabel('Depth')
+    # axs[1,0].set_ylabel('F_x')
+    # axs[1,1].set_ylabel('F_y')
+    # axs[0,1].set_ylabel('m_soil')
+
+    # axs[0,0].set_xlim(-0.2,5)
+    # axs[0,1].set_xlim(-0.2,5)
+    # axs[1,0].set_xlim(-0.2,5)
+    # axs[1,1].set_xlim(-0.2,5)
+
+    # axs[0,0].set_ylim(-1,1.5)
+    # axs[0,1].set_ylim(-6,6)
+    # axs[1,0].set_ylim(-20,20)
+    # axs[1,1].set_ylim(-15,15)
 
     plt.show()
+
+if __name__== "__main__":
+    # for test_ndx in range(3,6):
+    #     main(test_ndx)
+    main(5)
