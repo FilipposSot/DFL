@@ -347,7 +347,7 @@ class DFL(DynamicModel):
         U_minus   = DynamicModel.flatten_trajectory_data(  U_minus).T
         Eta_plus  = DynamicModel.flatten_trajectory_data(Eta_plus ).T
         U_plus    = DynamicModel.flatten_trajectory_data(  U_plus ).T
-        
+
         if self.ac_filter:
             # Compute anticausal filter
             self.D = DFL.regress_D_matrix(U_minus, Eta_minus)
@@ -413,7 +413,8 @@ class DFL(DynamicModel):
     def simulate_system(self, x_0: np.ndarray, u_func: Callable, t_f: float, continuous: bool=False):
         u_minus = np.zeros((self.plant.n_u,1))
         eta_0 = self.plant.phi(0.0, x_0, u_minus)
-        etas_0 = eta_0 - np.matmul(self.D, u_minus)
+        if self.ac_filter:
+            eta_0-= np.squeeze(np.matmul(self.D, u_minus))
         xi_0 = np.concatenate((x_0,eta_0))
 
         if continuous == True:
