@@ -547,7 +547,6 @@ class L3(DynamicModel):
         axs.legend()
         if title is not None:
             axs.title(title)
-        plt.show()
 
         model.eval()
         return model
