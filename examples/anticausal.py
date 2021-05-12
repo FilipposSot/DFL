@@ -52,11 +52,6 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
     # nonlinear observation equations
     @staticmethod
     def g(t,x,u):
-        q = x[0]
-        ec = Plant1.phi_c(q)
-        er = u[0]-ec
-        f = Plant1.phi_r(er)
-
         return np.copy(x)
 
     # auxiliary variables (outputs from nonlinear elements)
@@ -82,48 +77,43 @@ if __name__== "__main__":
     driving_fun = dfl.dynamic_system.DFLDynamicPlant.sin_u_func
     plant1 = Plant1()
     x_0 = np.zeros(plant1.n_x)
-    fig, axs = plt.subplots(2, 1)
+    fig, axs = plt.subplots(1, 1)
 
     tru = dm.GroundTruth(plant1)
     data = tru.generate_data_from_random_trajectories()
     t, u, x_tru, y_tru = tru.simulate_system(x_0, driving_fun, 10.0)
-    axs[0].plot(t, x_tru[:,0], 'k-', label='Ground Truth')
+    axs.plot(t, u, 'gainsboro')
+    axs.plot(t, x_tru[:,0], 'k-', label='Ground Truth')
 
     koo = dm.Koopman(plant1, observable='polynomial')
     koo.learn(data)
     _, _, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, 10.0)
-    axs[0].plot(t, x_koo[:,0], 'g-.', label='Koopman')
+    axs.plot(t, x_koo[:,0], 'g-.', label='Koopman')
 
     dmd = dm.DFL(plant1, ac_filter=False)
     dmd.learn(data)
     _, _, x_dmd, y_dmd = dmd.simulate_system(x_0, driving_fun, 10.0)
-    axs[0].plot(t, x_dmd[:,0], 'c-.', label='DMDc')
+    axs.plot(t, x_dmd[:,0], 'c-.', label='DMDc')
 
     dfl = dm.DFL(plant1, ac_filter=True)
     dfl.learn(data)
     _, _, x_dfl, y_dfl = dfl.simulate_system(x_0, driving_fun, 10.0)
-    axs[0].plot(t, x_dfl[:,0], 'r-.', label='DFL')
+    axs.plot(t, x_dfl[:,0], 'r-.', label='DFL')
 
     lrn = dm.L3(plant1, 2, ac_filter='linear', model_fn='model_toy_acf', retrain=False, hidden_units_per_layer=256)
     lrn.learn(data)
     _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, 10.0)
-    axs[0].plot(t, x_lrn[:,0], 'b-.', label='L3')
+    axs.plot(t, x_lrn[:,0], 'b-.', label='L3')
 
     lnf = dm.L3(plant1, 2, ac_filter='none', model_fn='model_toy_nof', retrain=False, hidden_units_per_layer=256)
     lnf.learn(data)
     _, _, x_lnf, y_lnf = lnf.simulate_system(x_0, driving_fun, 10.0)
-    axs[0].plot(t, x_lnf[:,0], 'm-.', label='L3 (NoF)')
+    axs.plot(t, x_lnf[:,0], 'm-.', label='L3 (NoF)')
 
     bb = (fig.subplotpars.left, fig.subplotpars.top+0.02, fig.subplotpars.right-fig.subplotpars.left, .1)
-    axs[0].legend(bbox_to_anchor=bb, loc='lower left', ncol=6, mode="expand", borderaxespad=0., bbox_transform=fig.transFigure)
-  
-    axs[1].plot(t, u, 'k')
+    axs.legend(bbox_to_anchor=bb, loc='lower left', ncol=6, mode="expand", borderaxespad=0., bbox_transform=fig.transFigure)
 
-    axs[1].set_xlabel('time')
-    
-    axs[0].set_ylabel('q')
-    axs[1].set_ylabel('u')
-
-    axs[0].set_xticks([])
+    axs.set_xlabel('time')
+    axs.set_ylabel('q')
 
     plt.show()
