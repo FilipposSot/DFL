@@ -7,11 +7,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
 
-# m = 1.0
-# k11 = 0.2
-# k13 = 2.0
-# b1  = 3.0
-
 plt.rcParams["font.family"] = "Times New Roman"
 
 class Plant1(dfl.dynamic_system.DFLDynamicPlant):
@@ -83,6 +78,7 @@ if __name__== "__main__":
     data = tru.generate_data_from_random_trajectories()
     t, u, x_tru, y_tru = tru.simulate_system(x_0, driving_fun, 10.0)
     axs.plot(t, u, 'gainsboro')
+    axs.text(9.7, -0.43, 'u', fontsize='xx-large', color='tab:gray', fontstyle='italic')
     axs.plot(t, x_tru[:,0], 'k-', label='Ground Truth')
 
     koo = dm.Koopman(plant1, observable='polynomial')
@@ -113,7 +109,8 @@ if __name__== "__main__":
     bb = (fig.subplotpars.left, fig.subplotpars.top+0.02, fig.subplotpars.right-fig.subplotpars.left, .1)
     axs.legend(bbox_to_anchor=bb, loc='lower left', ncol=6, mode="expand", borderaxespad=0., bbox_transform=fig.transFigure)
 
-    axs.set_xlabel('time')
-    axs.set_ylabel('q')
+    axs.set_xlabel('time (s)')
+    axs.set_ylabel('q (m)')
+    fig.subplots_adjust(bottom=0.2)
 
     plt.show()
