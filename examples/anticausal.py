@@ -96,12 +96,12 @@ if __name__== "__main__":
     _, _, x_dfl, y_dfl = dfl.simulate_system(x_0, driving_fun, 10.0)
     axs.plot(t, x_dfl[:,0], 'r-.', label='DFL')
 
-    lrn = dm.L3(plant1, 2, ac_filter='linear', model_fn='model_toy_acf', retrain=False, hidden_units_per_layer=256)
+    lrn = dm.L3(plant1, 2, ac_filter='linear', model_fn='model_toy_acf', retrain=False, hidden_units_per_layer=256, num_hidden_layers=2)
     lrn.learn(data)
     _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, 10.0)
     axs.plot(t, x_lrn[:,0], 'b-.', label='L3')
 
-    lnf = dm.L3(plant1, 2, ac_filter='none', model_fn='model_toy_nof', retrain=False, hidden_units_per_layer=256)
+    lnf = dm.L3(plant1, 2, ac_filter='none', model_fn='model_toy_nof', retrain=False, hidden_units_per_layer=256, num_hidden_layers=2)
     lnf.learn(data)
     _, _, x_lnf, y_lnf = lnf.simulate_system(x_0, driving_fun, 10.0)
     axs.plot(t, x_lnf[:,0], 'm-.', label='L3 (NoF)')

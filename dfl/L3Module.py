@@ -3,7 +3,7 @@
 import torch, math
 
 class LearnedDFL(torch.nn.Module):
-    def __init__(self, D_x: int, D_z: int, D_e: int, D_u: int, H: int):
+    def __init__(self, D_x: int, D_z: int, D_e: int, D_u: int, H: int, hidden_layers: int=1):
         super(LearnedDFL, self).__init__()
 
         # Store dimensions in instance variables
@@ -18,12 +18,19 @@ class LearnedDFL(torch.nn.Module):
         # N/N model to compute augmented state, eta = g((x,zeta))
         self.g = torch.nn.Sequential(
             torch.nn.Linear(D_x+D_z,H),
-            torch.nn.ReLU(),
-            torch.nn.Linear(H,H),
-            torch.nn.ReLU(),
-            torch.nn.Linear(H,D_e),
             torch.nn.ReLU()
         )
+        assert hidden_layers>0
+        lname = 1
+        for _ in range(hidden_layers-1):
+            lname+= 1
+            self.g.add_module(str(lname), torch.nn.Linear(H,H))
+            lname+= 1
+            self.g.add_module(str(lname), torch.nn.ReLU())
+        lname+= 1
+        self.g.add_module(str(lname), torch.nn.Linear(H,D_e))
+        lname+= 1
+        self.g.add_module(str(lname), torch.nn.ReLU())
 
         # Linear dynamic model matrices
         self.A = torch.nn.Linear(D_xi, D_x, bias=False)

@@ -131,7 +131,6 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
 def main(test_ndx):
     plant1 = Plant1()
     fig, axs = plt.subplots(2,3)
-    # fig.suptitle(test_ndx)
 
     data, test_data = Plant1.generate_data_from_file('data_nick_not_flat.npz', test_ndx=test_ndx)
     driving_fun = test_data['u']

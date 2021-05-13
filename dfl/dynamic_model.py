@@ -430,13 +430,14 @@ class L3(DynamicModel):
         LINEAR = 1
         NONLINEAR = 2
 
-    def __init__(self, dynamic_plant: dfl.dynamic_system.DFLDynamicPlant, n_eta: int, dt_data: float=0.05, dt_control: float=0.1, ac_filter: str='none', model_fn: str='model', retrain: bool=True, hidden_units_per_layer: int=256):
+    def __init__(self, dynamic_plant: dfl.dynamic_system.DFLDynamicPlant, n_eta: int, dt_data: float=0.05, dt_control: float=0.1, ac_filter: str='none', model_fn: str='model', retrain: bool=True, hidden_units_per_layer: int=256, num_hidden_layers: int=1):
         self.n_x = dynamic_plant.n_x
         self.n_z = dynamic_plant.n_eta
         self.n_e = n_eta
         self.n_u = dynamic_plant.n_u
 
         self.hidden_units_per_layer = hidden_units_per_layer
+        self.num_hidden_layers = num_hidden_layers
 
         if ac_filter == 'none':
             self.ac_filter = L3.AC_Filter.NONE
@@ -568,7 +569,7 @@ class L3(DynamicModel):
         if self.ac_filter == L3.AC_Filter.NONLINEAR:
             self.model = L3Module.ILDFL     (self.n_x, self.n_z, self.n_e, self.n_u, self.hidden_units_per_layer)
         else:
-            self.model = L3Module.LearnedDFL(self.n_x, self.n_z, self.n_e, self.n_u, self.hidden_units_per_layer)
+            self.model = L3Module.LearnedDFL(self.n_x, self.n_z, self.n_e, self.n_u, self.hidden_units_per_layer, hidden_layers=self.num_hidden_layers)
 
         # If anticausal filter is linear, learn D
         if self.ac_filter == L3.AC_Filter.LINEAR:
