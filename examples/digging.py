@@ -6,6 +6,7 @@ import dfl.dynamic_model as dm
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import signal
+import time
 
 plt.rcParams["font.family"] = "Times New Roman"
 
@@ -41,7 +42,7 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
         pass
     
     @staticmethod
-    def generate_data_from_file(file_name: str, test_ndx: int=4):
+    def generate_data_from_file(file_name: str, test_ndx: int=4, truncate: float=0):
         '''
         x = [x, y, phi, v_x, v_y, omega], e = [a_x,a_y,alpha, F_x, F_y, m_soil]
         u = [u_x,u_y,tau]
@@ -54,6 +55,13 @@ class Plant1(dfl.dynamic_system.DFLDynamicPlant):
         e = data['e']
         e = e[:,:,3:] # Filippos Curating: rm accelerations
         u = data['u']
+
+        # Truncate
+        last_ind = int((1-truncate)*len(t))
+        t = t[:last_ind]
+        x = x[:last_ind]
+        e = e[:last_ind]
+        u = u[:last_ind]
 
         # Assemble data into paradigm
         t_data = t
@@ -132,7 +140,7 @@ def main(test_ndx):
     plant1 = Plant1()
     fig, axs = plt.subplots(2,3)
 
-    data, test_data = Plant1.generate_data_from_file('data_nick_not_flat.npz', test_ndx=test_ndx)
+    data, test_data = Plant1.generate_data_from_file('data_nick_not_flat.npz', test_ndx=test_ndx, truncate=0.75)
     driving_fun = test_data['u']
     t = test_data['t']
     dt_data = t[1]-t[0]
@@ -148,14 +156,18 @@ def main(test_ndx):
     axs[1,2].plot(t, test_data['eta'][:,2], 'k-')   # m
 
     koo = dm.Koopman(plant1, dt_data=dt_data, dt_control=dt_control, observable='polynomial', n_koop=64)
+    start_time = time.time()
     koo.learn(data)
+    print('Koopman: {}'.format(time.time()-start_time))
     t, u, x_koo, y_koo = koo.simulate_system(x_0, driving_fun, t[-1])
     axs[0,0].plot(t, x_koo[:,0], 'g-.', label='Koopman')
     axs[0,1].plot(t, x_koo[:,1], 'g-.')
     axs[0,2].plot(t, x_koo[:,2], 'g-.')
 
     dmd = dm.Koopman(plant1, dt_data=dt_data, dt_control=dt_control, observable='polynomial', n_koop=len(xs_0))
+    start_time = time.time()
     dmd.learn(data, dmd=True)
+    print('DMDc: {}'.format(time.time()-start_time))
     _, _, x_dmd, y_dmd = dmd.simulate_system(xs_0, driving_fun, t[-1])
     axs[0,0].plot(t, x_dmd[:,0], 'r-.', label='DMDc')
     axs[0,1].plot(t, x_dmd[:,1], 'r-.')
@@ -164,8 +176,10 @@ def main(test_ndx):
     axs[1,1].plot(t, x_dmd[:,7], 'r-.')
     axs[1,2].plot(t, x_dmd[:,8], 'r-.')
 
-    lrn = dm.L3(plant1, 4, dt_data=dt_data, dt_control=dt_control, ac_filter='linear', retrain=False, model_fn='model_dig', hidden_units_per_layer=64)
+    lrn = dm.L3(plant1, 4, dt_data=dt_data, dt_control=dt_control, ac_filter='linear', retrain=True, model_fn='model_dig', hidden_units_per_layer=64)
+    start_time = time.time()
     lrn.learn(data)
+    print('L3: {}'.format(time.time()-start_time))
     _, _, x_lrn, y_lrn = lrn.simulate_system(xs_0, driving_fun, t[-1])
     axs[0,0].plot(t, x_lrn[:,0], 'b-.', label='L3')
     axs[0,1].plot(t, x_lrn[:,1], 'b-.')
@@ -175,7 +189,9 @@ def main(test_ndx):
     axs[1,2].plot(t, x_lrn[:,8], 'b-.')
 
     lnf = dm.L3(plant1, 4, dt_data=dt_data, dt_control=dt_control, ac_filter='none', retrain=False, model_fn='model_dig_nof', hidden_units_per_layer=64)
+    start_time = time.time()
     lnf.learn(data)
+    print('L3 NoF: {}'.format(time.time()-start_time))
     _, _, x_lnf, y_lnf = lnf.simulate_system(xs_0, driving_fun, t[-1])
     axs[0,0].plot(t, x_lnf[:,0], 'm-.', label='L3 (NoF)')
     axs[0,1].plot(t, x_lnf[:,1], 'm-.')
