@@ -13,7 +13,7 @@ class LearnedDFL(torch.nn.Module):
         self.D_u = D_u
 
         # Compute dimension of data vector
-        D_xi = D_x + D_z + D_e + D_u
+        D_xi = D_x + D_e + D_u
 
         # N/N model to compute augmented state, eta = g((x,zeta))
         self.g = torch.nn.Sequential(
@@ -34,7 +34,7 @@ class LearnedDFL(torch.nn.Module):
 
         # Linear dynamic model matrices
         self.A = torch.nn.Linear(D_xi, D_x, bias=False)
-        self.Z = torch.nn.Linear(D_xi, D_z, bias=False)
+        # self.Z = torch.nn.Linear(D_xi, D_z, bias=False)
         self.H = torch.nn.Linear(D_xi, D_e, bias=False)
 
         # Anticausal filter matrix, D
@@ -43,15 +43,17 @@ class LearnedDFL(torch.nn.Module):
     def forward(self, x: torch.Tensor, zeta: torch.Tensor, u: torch.Tensor):
         zeta-= torch.matmul(u,self.D)
         xs   = torch.cat((x,zeta), 1)
+        # xs+=4
         eta  = self.g(xs)
-        xi   = torch.cat((xs,eta,u), 1)
+        # eta-=4
+        xi   = torch.cat((x,eta,u), 1)
 
-        x_tp1, zeta_tp1, eta_tp1 = self.ldm(xi)
+        x_tp1, eta_tp1 = self.ldm(xi)
 
-        return x_tp1, zeta_tp1, eta_tp1
+        return x_tp1, eta_tp1
 
     def ldm(self, xi: torch.Tensor):
-        return self.A(xi), self.Z(xi), self.H(xi)
+        return self.A(xi), self.H(xi)
 
     def regress_D_matrix(self, u: torch.Tensor, zeta: torch.Tensor):
         # Copy data tensors
@@ -83,7 +85,7 @@ class LearnedDFL(torch.nn.Module):
 
     def filter_linear_model(self):
         self.A = self._filter_linear_module(self.A)
-        self.Z = self._filter_linear_module(self.Z)
+        # self.Z = self._filter_linear_module(self.Z)
         self.H = self._filter_linear_module(self.H)
 
 class ILDFL(LearnedDFL):

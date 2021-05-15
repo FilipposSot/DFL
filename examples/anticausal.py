@@ -84,7 +84,8 @@ if __name__== "__main__":
     t, u, x_tru, y_tru = tru.simulate_system(x_0, driving_fun, 10.0)
     axs.plot(t, u, 'gainsboro')
     axs.text(9.7, -0.43, 'u', fontsize='xx-large', color='tab:gray', fontstyle='italic')
-    axs.plot(t, x_tru[:,0], 'k-', label='Ground Truth')
+    axs.plot(t, x_tru[:,0], 'k-', label='Gnd. Truth')
+    breakpoint()
 
     koo = dm.Koopman(plant1, observable='polynomial')
     koo.learn(data)
@@ -104,17 +105,17 @@ if __name__== "__main__":
     axs.plot(t, x_dfl[:,0], 'r-.', label='DFL')
     print('DFL Error: {}'.format(int_abs_error(x_dfl[:,0],x_tru[:,0])))
 
-    lrn = dm.L3(plant1, 2, ac_filter='linear', model_fn='model_toy_acf', retrain=False, hidden_units_per_layer=256, num_hidden_layers=2)
+    lrn = dm.L3(plant1, 2, ac_filter='linear', model_fn='model_toy_acf', retrain=True, hidden_units_per_layer=256, num_hidden_layers=2)
     lrn.learn(data)
     _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, 10.0)
     axs.plot(t, x_lrn[:,0], 'b-.', label='L3')
     print('L3 Error: {}'.format(int_abs_error(x_lrn[:,0],x_tru[:,0])))
 
-    lnf = dm.L3(plant1, 2, ac_filter='none', model_fn='model_toy_nof', retrain=False, hidden_units_per_layer=256, num_hidden_layers=2)
-    lnf.learn(data)
-    _, _, x_lnf, y_lnf = lnf.simulate_system(x_0, driving_fun, 10.0)
-    axs.plot(t, x_lnf[:,0], 'm-.', label='L3 (NoF)')
-    print('L3 (NoF) Error: {}'.format(int_abs_error(x_lnf[:,0],x_tru[:,0])))
+    # lnf = dm.L3(plant1, 2, ac_filter='none', model_fn='model_toy_nof', retrain=False, hidden_units_per_layer=256, num_hidden_layers=2)
+    # lnf.learn(data)
+    # _, _, x_lnf, y_lnf = lnf.simulate_system(x_0, driving_fun, 10.0)
+    # axs.plot(t, x_lnf[:,0], 'm-.', label='L3 (NoF)')
+    # print('L3 (NoF) Error: {}'.format(int_abs_error(x_lnf[:,0],x_tru[:,0])))
 
     bb = (fig.subplotpars.left, fig.subplotpars.top+0.02, fig.subplotpars.right-fig.subplotpars.left, .1)
     axs.legend(bbox_to_anchor=bb, loc='lower left', ncol=6, mode="expand", borderaxespad=0., bbox_transform=fig.transFigure)

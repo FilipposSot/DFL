@@ -483,10 +483,10 @@ class L3(DynamicModel):
         eta_t = model.g(xs_t)
 
         # Propagate x, zeta, and eta using model
-        x_hat, zeta_hat, eta_hat = model(x_tm1, zeta_tm1, u_tm1)
+        x_hat, eta_hat = model(x_tm1, zeta_tm1, u_tm1)
 
         # Return
-        return loss_fn(x_t, x_hat) + loss_fn(zeta_t, zeta_hat) + loss_fn(eta_t, eta_hat)
+        return loss_fn(x_t, x_hat) + loss_fn(eta_t, eta_hat)
 
     def train_model(self, model: torch.nn.Module, x: torch.Tensor, y: torch.Tensor, title: str=None):
         # Reshape x and y to be vector of tensors
@@ -553,6 +553,9 @@ class L3(DynamicModel):
         model.eval()
         return model
 
+    def initialize_model(self, A, H):
+        breakpoint()
+
     def learn(self, data: dict):
         # Copy data for manipulation
         data = copy.deepcopy(data)
@@ -602,7 +605,7 @@ class L3(DynamicModel):
             xs = torch.cat((x,z), 0)
             eta = self.model.g(xs)
 
-            xs = torch.cat((xs,eta), 0)
+            xs = torch.cat((x,eta), 0)
 
             return xs.detach().numpy()
 
@@ -618,27 +621,24 @@ class L3(DynamicModel):
 
         # Parse input
         x_t  = xs[                 :self.n_x         ]
-        zs_t = xs[self.n_x         :self.n_x+self.n_z]
-        e_t  = xs[self.n_x+self.n_z:                 ]
+        e_t  = xs[self.n_x:                 ]
 
         # NumPy to PyTorch
         x_t  = torch.from_numpy( x_t).type(dtype)
-        zs_t = torch.from_numpy(zs_t).type(dtype)
         e_t  = torch.from_numpy( e_t).type(dtype)
         u    = torch.from_numpy( u  ).type(dtype)
 
         # Assemble into xi
-        xi_t = torch.cat((x_t,zs_t,e_t,u), 0)
+        xi_t = torch.cat((x_t,e_t,u), 0)
 
         # Propagate through model
-        x_tp1, zs_tp1, eta_tp1 = self.model.ldm(xi_t)
+        x_tp1, eta_tp1 = self.model.ldm(xi_t)
 
         # PyTorch to NumPy
         x_tp1   =   x_tp1.detach().numpy()
-        zs_tp1  =  zs_tp1.detach().numpy()
         eta_tp1 = eta_tp1.detach().numpy()
 
-        return np.concatenate((x_tp1,zs_tp1,eta_tp1))
+        return np.concatenate((x_tp1,eta_tp1))
 
     def simulate_system(self, xs_0: np.ndarray, u_func: Callable, t_f: float):
         x_0 = xs_0[:self.n_x]
