@@ -88,7 +88,7 @@ class DynamicModel(ABC):
                 else:
                     u_t = u_func[i_u]
                     i_u+= 1
-            # breakpoint()
+
             t_array.append(t)
             x_array.append(x_t)
             u_array.append(u_t)
@@ -553,10 +553,20 @@ class L3(DynamicModel):
         model.eval()
         return model
 
-    def initialize_model(self, A, H):
-        breakpoint()
+    def initialize_model(self, dfl):
+        A_dfl = np.concatenate((dfl.A_disc_dfl[:self.n_x,:], dfl.B_disc_dfl[:self.n_x,:]), 1)
+        H_dfl = np.concatenate((dfl.A_disc_dfl[self.n_x:,:], dfl.B_disc_dfl[self.n_x:,:]), 1)
 
-    def learn(self, data: dict):
+        self.model.A.weight.data=torch.from_numpy(A_dfl).type(dtype)
+        self.model.H.weight.data=torch.from_numpy(H_dfl).type(dtype)
+
+        for l in range(0,3,2):
+            self.model.g[l].weight.data.fill_(0)
+            self.model.g[l].weight.data[:3,:3] = torch.eye(3)
+        self.model.g[4].weight.data.fill_(0)
+        self.model.g[4].weight.data[:,1:3] = torch.eye(2)
+
+    def learn(self, data: dict, dfl):
         # Copy data for manipulation
         data = copy.deepcopy(data)
 
@@ -580,8 +590,10 @@ class L3(DynamicModel):
 
         # Train/load model
         if self.retrain:
-            self.model = self.train_model(self.model, torch.cat((x_minus, z_minus, u_minus), 0), torch.cat((x_plus,z_plus,u_plus), 0))
-            torch.save(self.model.state_dict(), '{}.pt'.format(self.model_fn))
+            self.initialize_model(dfl)
+            self.model.unfilter_linear_model()
+            # self.model = self.train_model(self.model, torch.cat((x_minus, z_minus, u_minus), 0), torch.cat((x_plus,z_plus,u_plus), 0))
+            # torch.save(self.model.state_dict(), '{}.pt'.format(self.model_fn))
         else:
             self.model.load_state_dict(torch.load('{}.pt'.format(self.model_fn)))
         self.model.filter_linear_model()
@@ -603,7 +615,9 @@ class L3(DynamicModel):
                 nu = self.model.g_u(u)
                 z -= self.model.D(nu)
             xs = torch.cat((x,z), 0)
+            xs+= 4
             eta = self.model.g(xs)
+            eta-= 4
 
             xs = torch.cat((x,eta), 0)
 

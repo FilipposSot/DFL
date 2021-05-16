@@ -43,9 +43,9 @@ class LearnedDFL(torch.nn.Module):
     def forward(self, x: torch.Tensor, zeta: torch.Tensor, u: torch.Tensor):
         zeta-= torch.matmul(u,self.D)
         xs   = torch.cat((x,zeta), 1)
-        # xs+=4
+        xs+=4
         eta  = self.g(xs)
-        # eta-=4
+        eta-=4
         xi   = torch.cat((x,eta,u), 1)
 
         x_tp1, eta_tp1 = self.ldm(xi)
@@ -72,14 +72,14 @@ class LearnedDFL(torch.nn.Module):
         A = M.weight
 
         # Partition matrix into zeta and u components
-        A_z = A[:, self.D_x:self.D_x+self.D_z]
-        A_u = A[:, self.D_x+self.D_z+self.D_e:]
+        A_z = A[:, self.D_x:self.D_x+self.D_e]
+        A_u = A[:, self.D_x+self.D_e:]
 
         # Add filter to u component
         A_u+= torch.matmul(A_z, torch.transpose(self.D, 0,1))
 
         # Reassemble and return
-        A[:, self.D_x+self.D_z+self.D_e:] = A_u
+        A[:, self.D_x+self.D_e:] = A_u
         M.weight.data = A
         return M
 
@@ -87,6 +87,29 @@ class LearnedDFL(torch.nn.Module):
         self.A = self._filter_linear_module(self.A)
         # self.Z = self._filter_linear_module(self.Z)
         self.H = self._filter_linear_module(self.H)
+
+    def _unfilter_linear_module(self, M: torch.nn.Linear):
+        with torch.no_grad():
+            # Extract matrix from linear module
+            A = M.weight
+
+            # Partition matrix into zeta and u components
+            A_z = A[:, self.D_x:self.D_x+self.D_e]
+            A_u = A[:, self.D_x+self.D_e:]
+
+            # Add filter to u component
+            A_u-= torch.matmul(A_z, torch.transpose(self.D, 0,1))
+
+            # Reassemble and return
+            A[:, self.D_x+self.D_e:] = A_u
+
+            M.weight.data = A
+            return M
+
+    def unfilter_linear_model(self):
+        self.A = self._unfilter_linear_module(self.A)
+        # self.Z = self._unfilter_linear_module(self.Z)
+        self.H = self._unfilter_linear_module(self.H)
 
 class ILDFL(LearnedDFL):
     def __init__(self, D_x: int, D_zeta: int, D_eta: int, D_u: int, H: int):

@@ -85,7 +85,6 @@ if __name__== "__main__":
     axs.plot(t, u, 'gainsboro')
     axs.text(9.7, -0.43, 'u', fontsize='xx-large', color='tab:gray', fontstyle='italic')
     axs.plot(t, x_tru[:,0], 'k-', label='Gnd. Truth')
-    breakpoint()
 
     koo = dm.Koopman(plant1, observable='polynomial')
     koo.learn(data)
@@ -106,7 +105,7 @@ if __name__== "__main__":
     print('DFL Error: {}'.format(int_abs_error(x_dfl[:,0],x_tru[:,0])))
 
     lrn = dm.L3(plant1, 2, ac_filter='linear', model_fn='model_toy_acf', retrain=True, hidden_units_per_layer=256, num_hidden_layers=2)
-    lrn.learn(data)
+    lrn.learn(data, dfl)
     _, _, x_lrn, y_lrn = lrn.simulate_system(x_0, driving_fun, 10.0)
     axs.plot(t, x_lrn[:,0], 'b-.', label='L3')
     print('L3 Error: {}'.format(int_abs_error(x_lrn[:,0],x_tru[:,0])))
