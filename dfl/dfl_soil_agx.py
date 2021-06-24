@@ -22,20 +22,21 @@ import copy
 import matplotlib.pyplot as plt
 
 from sklearn.preprocessing import PolynomialFeatures
+from sklearn import linear_model
 
 np.set_printoptions(precision = 4)
 np.set_printoptions(suppress = True)
 
 class DFLSoil():
     
-    def __init__(self, dynamic_plant,
-                       dt_data = 0.05,
-                       dt_control = 0.05):
+    def __init__(self, dynamic_plant, dt_data = 0.05, dt_control = 0.05):
         
         self.plant = dynamic_plant
         self.dt_data = dt_data 
         self.dt_control = dt_control 
         self.n_s = 2
+
+        self.koop_poly_order = 3
 
         self.H_disc_x   = np.zeros((self.plant.n_eta,self.plant.n_x))
         self.H_disc_eta = np.zeros((self.plant.n_eta,self.plant.n_eta)) 
@@ -85,10 +86,6 @@ class DFLSoil():
 
         print(np.absolute(np.linalg.eig(A_lin)[0]))
 
-        # print('----------------------------------')
-        # print(self.A_disc_x)
-        # print(A_disc_x_2)
-    
     def regress_model_custom(self, X, Eta, U, S):
         '''
         regress the H matrix for DFL model
@@ -175,23 +172,126 @@ class DFLSoil():
                                                     np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
                                                     self.dt_data)
 
-    def g_Koop(self,x,eta):
+    def g_Koop_x(self,x,eta,s):
 
-        poly = PolynomialFeatures(5,include_bias=False)
-        y = poly.fit_transform(np.array([[x[0],x[1],eta[0],eta[1],eta[2]]]))
-        
-        # # print(y.shape)
-        # y = np.array([x[0],x[1],eta[0],eta[1],eta[2],
-        #               x[0]**2,x[0]**3,x[0]**4,x[0]**5,x[0]**6,
-        #               x[1]**2,x[1]**3,x[1]**4,x[1]**5,x[1]**6,
-        #               eta[0]**2,eta[0]**3,eta[0]**4,eta[0]**5,eta[0]**6,
-        #               eta[1]**2,eta[1]**3,eta[1]**4,eta[1]**5,eta[1]**6,
-        #               eta[2]**2,eta[2]**3,eta[2]**4,eta[2]**5,eta[2]**6,
-        #               x[0]*x[1],x[0]*eta[0],x[0]*eta[1],x[0]*eta[2],
-        #               x[1]*eta[0],x[1]*eta[1],x[1]*eta[2],
-        #               eta[0]*eta[1],eta[0]*eta[2],
-        #               eta[1]*eta[2]])
+        poly = PolynomialFeatures(self.koop_poly_order,include_bias=False)
+        # xi =  np.array(np.concatenate((x,eta[:3])))
+
+        y = poly.fit_transform(np.expand_dims(x,axis=0))
+
         return y[0,:]
+
+    def g_Koop_x_eta(self,x,eta,s):
+
+        poly = PolynomialFeatures(self.koop_poly_order,include_bias=False)
+        xi = np.array(np.concatenate((x,eta)))
+        y = poly.fit_transform(np.expand_dims(xi,axis=0))
+
+        return y[0,:]
+
+    def g_Koop_x_eta_2(self, x,eta,s):
+
+        poly = PolynomialFeatures(self.koop_poly_order,include_bias=False)
+        eta_new = np.array([eta[3], eta[4], eta[5], eta[3]/(0.169+eta[5]), eta[4]/(0.169+eta[5]), eta[3]*np.sin(x[2]),eta[4]*np.cos(x[2])])
+        xi = np.array(np.concatenate((x,eta_new)))
+
+        y = poly.fit_transform(np.expand_dims(xi,axis=0))
+
+        return y[0,:]
+
+    def g_Koop_x_eta_3(self, x,eta,s):
+
+        poly = PolynomialFeatures(self.koop_poly_order,include_bias=False)
+        r = eta[6] - x[1]
+        eta_new = np.array([eta[3], eta[4], eta[5], r ])
+        xi = np.array(np.concatenate((x,eta_new)))
+
+
+        y = poly.fit_transform(np.expand_dims(xi,axis=0))
+
+        return y[0,:]
+
+    def g_Koop_x_eta_4(self, x, eta, s):
+
+        poly = PolynomialFeatures(self.koop_poly_order,include_bias=False)
+
+        r_S = eta[3] - x[1]
+        r_com = copy.copy(r_S) 
+
+        m_hat = 0.169 + eta[2]
+        I_hat = 0.130 + eta[2]*r_com**2
+
+        eta_new = np.array([eta[0], eta[1], eta[2],
+                            eta[0]/m_hat , eta[1]/m_hat,
+                            r_S*eta[0]*np.sin(x[2])/I_hat,
+                            r_S*eta[1]*np.cos(x[2])/I_hat])
+
+        xi = np.array(np.concatenate((x,eta_new)))
+
+        y = poly.fit_transform(np.expand_dims(xi,axis=0))
+
+        return y[0,:]
+
+    def g_Koop_x_eta_5(self, x, eta, s):
+
+        poly = PolynomialFeatures(self.koop_poly_order,include_bias=False)
+
+        r_S = eta[3] - x[1]
+        r_com = copy.copy(r_S) 
+
+        m_hat = 0.169 + eta[2]
+        I_hat = 0.130 + eta[2]*r_com**2
+
+        eta_new = np.array([eta[0], eta[1], eta[2],
+                            x[3]*m_hat , x[4]*m_hat,  x[5]*I_hat,
+                            r_S*eta[0]*np.sin(x[2]),
+                            r_S*eta[1]*np.cos(x[2])])
+
+        xi = np.array(np.concatenate((x,eta_new)))
+
+        y = poly.fit_transform(np.expand_dims(xi,axis=0))
+
+        return y[0,:]
+
+    def h_Koop_1(self, x, eta, s, u):
+
+        r_S = eta[3] - x[1]
+        r_com = eta[4] 
+
+        m_hat = 0.169 + eta[2]
+        I_hat = 0.130 + eta[2]*r_com**2
+
+        A = np.array([[1/m_hat ,   0.    ,  0.  ],
+                      [0.      , 1/m_hat ,  0.  ],
+                      [0.      ,    0.   , 1/I_hat]])
+
+        ups = A.dot(u)
+
+        return ups
+
+    def h_Koop_1_inverse(self, x, eta, s, ups):
+
+        r_S = eta[3] - x[1]
+        r_com = eta[4] 
+
+        m_hat = 0.169 + eta[2]
+        I_hat = 0.130 + eta[2]*r_com**2
+
+        A = np.array([[m_hat ,   0.  ,  0.   ],
+                      [0.    , m_hat ,  0.   ],
+                      [0.    ,    0. , I_hat ]])
+
+        u = A.dot(ups)
+
+        return u
+
+    def h_Koop_identity(self, x, eta, s, u):
+
+        return u
+
+    def h_Koop_identity_inverse(self, x, eta, s, ups):
+
+        return ups
 
     def regress_model_Koop(self, X, Eta, U, S):
         '''
@@ -226,8 +326,8 @@ class DFLSoil():
 
         for j in range(x_shape[0]):
             for i in range(x_shape[1]):
-                Y_minus.append( self.g_Koop(X_minus[j,i,:], Eta_minus[j,i,:]))
-                Y_plus.append( self.g_Koop(X_plus[j,i,:], Eta_plus[j,i,:]))
+                Y_minus.append( self.g_Koop(X_minus[j,i,:], Eta_minus[j,i,:], S_minus[j,i,:]))
+                Y_plus.append(  self.g_Koop(X_plus[j,i,:],  Eta_plus[j,i,:],  S_plus[j,i,:]))
 
         Y_minus = np.array( Y_minus )
         Y_plus = np.array( Y_plus )
@@ -240,12 +340,106 @@ class DFLSoil():
         # self.K_x   = H_disc[:,:self.plant.n_x + self.plant.n_eta ]
         # self.K_u   = H_disc[:, self.plant.n_x + self.plant.n_eta             : self.plant.n_x + self.plant.n_eta + self.plant.n_u]
 
-        self.K_x   = H_disc[:,:-2 ]
-        self.K_u   = H_disc[:,-2: ]
+        self.K_x   = H_disc[:,:-3 ]
+        self.K_u   = H_disc[:,-3: ]
+        
+        self.n_koop = self.K_x.shape[0]
 
-        # print( np.absolute(np.linalg.eig(self.K_x)[0]) )
-        # print( self.K_x )
+        return self.K_x, self.K_u
 
+    def regress_model_Koop_with_surf(self, X, Eta, U, S, N = None):
+        '''
+        regress the H matrix for DFL model
+        '''
+        X_minus     = X[:,:-1,:]
+        Eta_minus   = Eta[:,:-1,:]
+        U_minus     = U[:,:-1,:]
+        S_minus     = S[:,:-1,:-1]
+
+        # print(S_minus.shape)
+
+        X_plus      = X[:,1:,:]
+        Eta_plus    = Eta[:,1:,:]
+        U_plus      = U[:,1:,:]
+        S_plus      = S[:,1:,:-1]
+
+        x_shape = X_minus.shape
+        
+        Y_minus = []
+        Y_plus = []
+        Ups_minus = []
+        Ups_plus = []
+
+        for j in range(x_shape[0]):
+            for i in range(x_shape[1]):
+                Y_minus.append(self.g_Koop(X_minus[j,i,:], Eta_minus[j,i,:], S_minus[j,i,:]))
+                Y_plus.append( self.g_Koop(X_plus[j,i,:],  Eta_plus[j,i,:],  S_plus[j,i,:]))
+                Ups_minus.append(self.h_Koop(X_minus[j,i,:], Eta_minus[j,i,:], S_minus[j,i,:], U_minus[j,i,:]))
+                Ups_plus.append( self.h_Koop(X_plus[j,i,:] , Eta_plus[j,i,:] , S_plus[j,i,:] , U_plus[j,i,:] ))
+        
+        Y_minus = np.array( Y_minus )
+        Y_plus = np.array( Y_plus )
+        Ups_minus = np.array( Ups_minus )
+        Ups_plus = np.array( Ups_plus )
+
+
+        if N is not None:
+            
+            train_indices = np.random.choice(range(Y_minus.shape[0]), size = N, replace=False)
+            Y_minus     = Y_minus[ train_indices,:] 
+            Y_plus      = Y_plus[ train_indices,:] 
+            U_minus     = U_minus.reshape(-1, U_minus.shape[-1])[ train_indices,:]
+            Ups_minus   = Ups_minus.reshape(-1, Ups_minus.shape[-1])[ train_indices,:]
+            S_minus     = S_minus.reshape(-1, S_minus.shape[-1])[ train_indices,:] 
+
+            Omega = np.concatenate((Y_minus, Ups_minus, S_minus),axis=1).T
+            Y = Y_plus.T
+
+        else:
+        
+            Omega = np.concatenate((Y_minus, Ups_minus.reshape(-1, Ups_minus.shape[-1]), S_minus.reshape(-1, S_minus.shape[-1])),axis=1).T
+            Y = Y_plus.T
+
+        
+        result = lstsq(Omega.T,Y.T,rcond=None)
+        
+        H_disc = result[0].T
+        residuals = result[1]
+
+        self.K_x   = H_disc[:,:-(self.plant.n_u+self.n_s)]
+        self.K_u   = H_disc[:, -(self.plant.n_u+self.n_s):-self.n_s ]
+        self.K_s   = H_disc[:, -self.n_s: ]
+
+        # clf = linear_model.ElasticNet(alpha = 0.0001, l1_ratio = 0.5)
+        # clf.fit(Omega.T,Y.T)
+        
+        # self.K_x= clf.coef_[:,:-(self.plant.n_u+self.n_s)]
+        # self.K_u = clf.coef_[:, -(self.plant.n_u+self.n_s):-self.n_s ]
+        # self.K_s = clf.coef_[:, -self.n_s: ]
+
+        # print(K_x_Lasso)
+
+        self.n_koop = self.K_x.shape[0]
+
+        return self.K_x, self.K_u, self.K_s
+    
+    def linearize_soil_dynamics_koop(self, x_nom):
+        
+        # print('---------------------------')
+        s_nom, s_dash_nom, s_dash_dash_nom, s_dash_dash_dash_nom = self.soilShapeEvaluator.soil_surf_eval(x_nom[0])
+
+        sigma_zero   =  np.array([s_nom, s_dash_nom]) 
+        sigma_zero_d =  np.array([s_dash_nom, s_dash_dash_nom])
+
+        T = np.zeros((self.n_s, self.n_koop ))
+        T[:,0] = 1.0
+
+        K_x_surf = self.K_x + self.K_s.dot(np.diag(sigma_zero_d)).dot(T)
+
+        K_lin_eta = self.K_s.dot(sigma_zero) - self.K_s.dot(sigma_zero_d)*x_nom[0]
+
+        return K_x_surf, self.K_u, K_lin_eta #  self.K_x, self.K_u, np.zeros(self.K_x.shape[0]) #       
+    
     def linearize_soil_dynamics_no_surface(self, x_nom):
       
         A_lin =  np.block([[self.A_disc_x, self.A_disc_eta],
@@ -284,26 +478,11 @@ class DFLSoil():
         B_lin = np.block([[self.B_disc_x],
                           [self.H_disc_u]])
 
-        # B_lin[3,2] =0.0
-        # B_lin[4,2] =0.0
-
-
-        # print('-----------------------------')
-        # print(x_nom[2])
-        # print(B_lin)
-        # B_lin[0,2] =  B_lin[0,2] + self.dt_data*( -0.738*np.sin(x_nom[2]))
-        # B_lin[1,2] =  B_lin[1,2] + self.dt_data*(  0.738*np.cos(x_nom[2]))
-        # print(B_lin)
-
-        # constant bias term
-        # print('Hs: ', self.H_disc_s)
-        # print('K1: ', sigma_zero )
-        # print('K2: ', -sigma_zero_d)
-
         K_lin_eta = self.H_disc_s.dot(sigma_zero) - self.H_disc_s.dot(sigma_zero_d)*x_nom[0]
         K_lin = np.concatenate((np.zeros(self.plant.n_x),K_lin_eta))
 
         return A_lin, B_lin, K_lin
+
 
     def f_cont_dfl(self,t,xi,u):
 
@@ -337,6 +516,17 @@ class DFLSoil():
         # y_plus = np.dot(self.K_x,x) + np.dot(self.K_u, u)
         y_plus = np.dot(A_lin,x) + np.dot(B_lin, u) + K_lin
 
+        return y_plus
+
+    def f_disc_koop(self,t,x,u):
+
+        if not isinstance(u,np.ndarray):
+            u = np.array([u])
+        
+        A_lin, B_lin, K_lin = self.linearize_soil_dynamics_koop(x)
+
+        y_plus = np.dot(A_lin,x) + np.dot(B_lin, u) + K_lin
+        
         return y_plus
         
     def g_disc_hybrid(self,t,x,u):
@@ -419,51 +609,5 @@ class DFLSoil():
             s_array.append(self.plant.soil_surf_eval(x_t[0]))
 
             D_t = s_array[-1][0] - x_array[-1][1]
-        # print(len(y_array))
+
         return np.array(t_array), np.array(u_array), np.array(x_array), np.array(y_array)
-
-    def simulate_system_nonlinear(self, x_0, u_func, t_f):
-
-        u_minus = np.zeros((self.plant.n_u,1))
-        t,u,x,y = self.simulate_system(x_0, u_minus, t_f, self.dt_data,
-                                        u_func, self.dt_control, self.plant.f, self.plant.g,
-                                        continuous = True)
-        
-        return t, u, x, y
-        
-    def simulate_system_dfl(self, x_0, u_func, t_f, continuous = True):
-
-        u_minus = np.zeros((self.plant.N_u,1))
-        eta_0 = self.plant.phi(0.0, x_0, u_minus)
-        xi_0 = np.concatenate((x_0,eta_0))
-        
-        if continuous == True:
-            t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
-                                            u_func, self.dt_control, self.f_cont_dfl, self.plant.g,
-                                            continuous = True)
-        else:
-            t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
-                                            u_func, self.dt_control, self.f_disc_dfl, self.plant.g,
-                                            continuous = False)
-            
-        return t, u, xi, y 
-
-    def simulate_system_koop(self, x_0, u_func, t_f):
-
-        u_minus = np.zeros((self.plant.N_u,1))
-        xi_0 = self.plant.g(0.0, x_0, u_minus)
-
-        t,u,xi,y = self.simulate_system(xi_0, u_minus, t_f, self.dt_data,
-                                        u_func,self.dt_control, self.f_koop, self.plant.g,
-                                        continuous = False)
-        return t, u, xi, y 
-
-    # def get_best_initial_hybrid(self, x_0, u_func, t_f):
-
-    #     u_0 = np.zeros((self.plant.n_u,1))
-    #     eta_0 = self.plant.phi_hybrid(0.0, x_0, u_0)
-    #     xi_0 = np.linalg.pinv(self.C_til).dot(eta_0 - self.D_til_1.dot(x_0) -self.D_til_2.dot(u_0)[:,0])
-
-    #     z_0 = np.concatenate((x_0,xi_0))
-
-    #     return z_0 

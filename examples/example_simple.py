@@ -86,6 +86,12 @@ class Plant1(DFLDynamicPlant):
         return y  
     
     @staticmethod
+    def gkoop3(t,x,u):
+        q,v = x[0], x[1]
+        y = np.array([q,v])
+        return y  
+    
+    @staticmethod
     def gkoop2(t,x,u):
         q,v = x[0],x[1]
 
@@ -133,7 +139,7 @@ def rand_u_func(y,t):
     return np.random.normal(0.0,0.3)
 
 def sin_u_func(y,t):
-    return 0.5*signal.square(3 * t)
+    return 1.5*signal.square(3 * t)
     # return np.sin(3*t) 
 
 if __name__== "__main__":
@@ -210,7 +216,7 @@ if __name__== "__main__":
     ################# DFL MODEL TEST ##############################################
     plant1 = Plant1()
     dfl1 = DFL(plant1, dt_data = 0.05, dt_control = 0.2)
-    setattr(plant1, "g", Plant1.gkoop2)
+    setattr(plant1, "g", Plant1.gkoop3)
 
     dfl1.generate_data_from_random_trajectories( t_range_data = 5.0, n_traj_data = 100 )
     dfl1.generate_DFL_disc_model()

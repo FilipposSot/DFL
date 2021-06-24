@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 
 import numpy as np
-from dfl import *
-from dynamic_system import *
+
+from dfl.dfl.dfl import *
+from dfl.dfl.dynamic_system import *
+from dfl.dfl.mpc import *
+
 import matplotlib.pyplot as plt
 
 # T_RANGE_DATA = 1.0
@@ -20,28 +23,28 @@ class Plant1(DFLDynamicPlant):
         # Linear part of states matrices
 
 
-        self.N_x = 2
-        self.N_eta = 2
-        self.N_u = 1
-        self.N_y =4
+        self.n_x = 2
+        self.n_eta = 2
+        self.n_u = 1
+        self.N_y = 4
 
-        self.N = self.N_x + self.N_eta
+        self.n = self.n_x + self.n_eta
 
-        # self.A_x  = np.array([[0.0, 1.0],
-        #                       [0.0, 0.0]])
+        # User defined matrices for DFL
+        self.A_cont_x  = np.array([[mu, 0.0],
+                                   [0.0, lam]])
 
-        # self.A_eta = np.array([[0.0, 0.0],
-        #                        [-1/m,-1/m]])
+        self.A_cont_eta = np.array([[0.0,0.0], [-lam,-lam]])
 
-        # self.A_eta = np.array([[0.0, 0.0],
-        #                        [-1/m,0.0]])
+        self.B_cont_x = np.array([[0.0],[0.0]])
 
         # self.B_x = np.array([[0.0],[1.0]])
 
-        self.x_init_min = np.array([-2.0,-2.0])
-        self.x_init_max = np.array([2.0 ,2.0])
+        self.x_min = np.array([-2.0,-2.0])
+        self.x_max = np.array([2.0 ,2.0])
 
-
+        self.u_min = np.array([-2.5])
+        self.u_max = np.array([ 2.5])
 
 
     # # functions defining constituitive relations for this particular system
@@ -49,23 +52,26 @@ class Plant1(DFLDynamicPlant):
     #     e = k11*q + k13*q**3
     #     return e
 
-    def P(self,x):
+    def P1(self,x):
         y = x**2
         return y
-
+   
+    def P2(self,x):
+        y = x**3
+        return y
     # nonlinear state equations
     def f(self,t,x,u):
 
         x_dot = np.zeros(x.shape)
         x1,x2 = x[0], x[1]
         x_dot[0] = mu*x1
-        x_dot[1] = lam*(x2-self.P(x1)) 
+        x_dot[1] = lam*(x2-self.P1(x1)-self.P2(x1)) 
         return x_dot
 
     # nonlinear observation equations
     def g(self,t,x,u):
         x1, x2 = x[0],x[1]
-        y = np.array([x1,x2,x1**2])
+        y = np.array([x1,x2,x1**2,x1**3])
         return y 
     
     # auxiliary variables (outputs from nonlinear elements)
@@ -74,11 +80,11 @@ class Plant1(DFLDynamicPlant):
         outputs the values of the auxiliary variables
         '''
         q,v = x[0],x[1]
-        eta = np.zeros(self.N_eta)
+        eta = np.zeros(self.n_eta)
         # eta[0] = self.phi_c1(q) + self.phi_r1(v)
         # eta[1] = 0.0
-        eta[0] = self.P(q)
-        eta[1] = self.P(q)
+        eta[0] = self.P1(q)
+        eta[1] = self.P2(q)
         return eta
 
 def zero_u_func(y,t):
@@ -95,7 +101,7 @@ if __name__== "__main__":
     dfl = DFL(plant)
     dfl.generate_data_from_random_trajectories()
     # dfl.generate_H_matrix()
-    dfl.generate_K_matrix()
+    dfl.regress_K_matrix()
 
     # dfl.generate_disrete_time_system()
 
@@ -120,17 +126,26 @@ if __name__== "__main__":
     # x_0 = np.array([1.0,1.0])
     error_koopman = np.array([0,0])
     # error_dfl = np.array([0,0])
+    
+    fig, axs = plt.subplots(3, 1)
 
-    for i in range(1):
+    for i in range(100):
 
-        x_0 = np.random.uniform(plant.x_init_min,plant.x_init_max)
+        x_0 = np.random.uniform(plant.x_min,plant.x_max)
 
         # t, u, x_dfl = dfl.simulate_system_dfl(x_0, zero_u_func, t_f)
-        t, u, x_nonlin = dfl.simulate_system_nonlinear(x_0, sin_u_func, t_f)
-        t, u, x_koop = dfl.simulate_system_koop(x_0, sin_u_func, t_f)
+        t, u, x_nonlin ,y_nonlin= dfl.simulate_system_nonlinear(x_0, sin_u_func, t_f)
+        t, u, x_koop,y_koop = dfl.simulate_system_koop(x_0, sin_u_func, t_f)
+
+        print(y_koop.shape)
+        
+        axs[0].plot(y_koop[:,0], y_koop[:,1], 'b')
+        axs[1].plot(y_koop[:,1], y_koop[:,2], 'b')
+        axs[2].plot(y_koop[:,2], y_koop[:,3], 'b')
 
         # error_koopman =+ np.mean(np.power(x_nonlin - x_koop[:,0:2],2),axis = 0)
         # error_dfl     =+ np.mean(np.power(x_nonlin -  x_dfl[:,0:2],2),axis = 0)
+
 
     # print('Koopman Error',error_koopman)
     # print('DFL Error', error_dfl)

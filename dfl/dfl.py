@@ -31,6 +31,7 @@ class DFL():
         self.plant = dynamic_plant
         self.dt_data = dt_data 
         self.dt_control = dt_control 
+        self.mu_x, self.sigma_x = 0.0, 0.0
 
     def regress_H_cont_matrix(self):
         '''
@@ -97,7 +98,7 @@ class DFL():
         # B_disc = inv(A_full).dot(expm(A_full*self.dt_data) - np.eye(A_full.shape[0])).dot(B_full)
 
         (A_disc,B_disc,_,_,_) = cont2discrete((A_cont_full, B_cont_full, 
-                                                 np.zeros(self.plant.N_x), np.zeros(self.plant.N_u)),
+                                                 np.zeros(self.plant.n_x), np.zeros(self.plant.n_u)),
                                                  self.dt_data)
 
         self.A_disc_dfl = A_disc
@@ -305,7 +306,7 @@ class DFL():
                 x_t = r.integrate(r.t + dt)
             else:
                 x_t = f_func(t, x_t, u_t)
-
+            
             t = t + dt
             y_t = g_func(t, x_t, u_t)
             
@@ -342,6 +343,8 @@ class DFL():
         Y_plus_data  = []
         Eta_plus_data  = []
 
+        # rng = np.random.default_rng(12345)
+
         for i in range(n_traj_data):
             
             # define initial conitions and range of time
@@ -376,15 +379,19 @@ class DFL():
                     u_t =  np.random.uniform(low = self.plant.u_min , high = self.plant.u_max)
 
                 #these are the inherent variables if the system ie input and state
-                t_array.append(r.t)
-                x_array.append(x_t)
-                u_array.append([u_t])
+
+                x_t_noisy = x_t + np.random.default_rng().normal(self.mu_x, self.sigma_x, self.plant.n_x)
+
+                t_array.append( r.t )
+                x_array.append( x_t_noisy )
+                u_array.append( [u_t] )
 
                 #these describe additional observations such as auxiliary variables or measurements
-                eta_array.append(self.plant.phi(r.t,x_t,u_t))
-                y_array.append(self.plant.g(r.t,x_t,u_t))
+ 
+                eta_array.append(self.plant.phi(r.t,x_t,u_t) +  np.random.default_rng().normal(self.mu_x, self.sigma_x, self.plant.n_eta))
+                y_array.append(self.plant.g(r.t,x_t_noisy ,u_t))
 
-            eta_dot_array = np.gradient(np.array(eta_array),self.dt_data)[0]
+            # eta_dot_array = np.gradient(np.array(eta_array),self.dt_data)[0]
 
             eta_dot_array2 = savgol_filter(np.array(eta_array),
                                            window_length = 5, polyorder = 3,
